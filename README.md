@@ -1,7 +1,7 @@
 ![Screenshot 1](assets/Wallpaper2.png)
 ## Home Assistant integration for the AudioControl Hyperion Apr16
 
-[![GitHub Release](https://img.shields.io/github/v/release/Fattykidd/ha-hyperion-apr16?style=flat-square&color=blue)](https://github.com/Fattykidd/ha-hyperion-apr16/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/fattykidd/ha-hyperion-apr16?style=flat-square&color=blue)](https://github.com/fattykidd/ha-hyperion-apr16/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
 This repo provides a [Home
