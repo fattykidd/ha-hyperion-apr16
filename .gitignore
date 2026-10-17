@@ -1,0 +1,14 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments and caches
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/

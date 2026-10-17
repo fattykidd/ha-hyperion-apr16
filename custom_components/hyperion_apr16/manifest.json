@@ -1,0 +1,10 @@
+{
+  "domain": "hyperion_apr16",
+  "name": "AudioControl Hyperion APR-16",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "requirements": []
+}
