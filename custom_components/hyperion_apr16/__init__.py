@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 
+from config import APR16Config
+from device import Apr16
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, CONF_NAME, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, DEFAULT_PORT
+from .const import DEFAULT_PORT, DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
-from device import Apr16
-from config import APR16Config
 
 _LOG = logging.getLogger(__name__)
 

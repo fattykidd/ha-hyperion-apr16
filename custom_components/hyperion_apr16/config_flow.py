@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from aiohttp import ClientError
 import voluptuous as vol
-
+from aiohttp import ClientError
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.data_entry_flow import FlowResult
@@ -66,4 +65,3 @@ class HyperionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_validate_input(self, host: str, port: int) -> None:
         """Validate the user input allows us to connect."""
         # Simple socket or HTTP probe check here
-        pass
