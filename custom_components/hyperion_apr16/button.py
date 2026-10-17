@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aiohttp import ClientError
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -69,7 +70,7 @@ class HyperionRebootButton(HyperionBaseButton):
         """Handle the button press."""
         try:
             await self._device.reboot()
-        except Exception as err:
+        except (ClientError, OSError) as err:
             _LOG.error("Failed to reboot Hyperion APR-16: %s", err)
 
 
@@ -83,7 +84,7 @@ class HyperionHpdButton(HyperionBaseButton):
         """Handle the button press."""
         try:
             await self._device.trigger_hpd()
-        except Exception as err:
+        except (ClientError, OSError) as err:
             _LOG.error("Failed to trigger HPD on Hyperion APR-16: %s", err)
 
 
@@ -100,7 +101,7 @@ class HyperionBassUpButton(HyperionBaseButton):
             current = await self._device.get_input_bass(active_input)
             await self._device.set_input_bass(active_input, current + 1.0)
             await self.coordinator.async_request_refresh()
-        except Exception as err:
+        except (ClientError, OSError) as err:
             _LOG.error("Failed to increase bass: %s", err)
 
 
@@ -117,7 +118,7 @@ class HyperionBassDownButton(HyperionBaseButton):
             current = await self._device.get_input_bass(active_input)
             await self._device.set_input_bass(active_input, current - 1.0)
             await self.coordinator.async_request_refresh()
-        except Exception as err:
+        except (ClientError, OSError) as err:
             _LOG.error("Failed to decrease bass: %s", err)
 
 
@@ -134,7 +135,7 @@ class HyperionTrebleUpButton(HyperionBaseButton):
             current = await self._device.get_input_treble(active_input)
             await self._device.set_input_treble(active_input, current + 1.0)
             await self.coordinator.async_request_refresh()
-        except Exception as err:
+        except (ClientError, OSError) as err:
             _LOG.error("Failed to increase treble: %s", err)
 
 
@@ -151,7 +152,7 @@ class HyperionTrebleDownButton(HyperionBaseButton):
             current = await self._device.get_input_treble(active_input)
             await self._device.set_input_treble(active_input, current - 1.0)
             await self.coordinator.async_request_refresh()
-        except Exception as err:
+        except (ClientError, OSError) as err:
             _LOG.error("Failed to decrease treble: %s", err)
 
 
@@ -168,7 +169,7 @@ class HyperionBrightnessUpButton(HyperionBaseButton):
             new_val = min(100, current + 10)
             await self._device.set_display_brightness(new_val)
             await self.coordinator.async_request_refresh()
-        except Exception as err:
+        except (ClientError, OSError) as err:
             _LOG.error("Failed to increase brightness: %s", err)
 
 
@@ -185,5 +186,5 @@ class HyperionBrightnessDownButton(HyperionBaseButton):
             new_val = max(0, current - 10)
             await self._device.set_display_brightness(new_val)
             await self.coordinator.async_request_refresh()
-        except Exception as err:
+        except (ClientError, OSError) as err:
             _LOG.error("Failed to decrease brightness: %s", err)

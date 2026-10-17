@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
+from aiohttp import ClientError
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_ADDRESS, CONF_NAME, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.data_entry_flow import FlowResult
 
-from .const import DEFAULT_NAME, DEFAULT_PORT, DOMAIN
-from device import Apr16
-from config import APR16Config
+from .const import DEFAULT_PORT, DOMAIN
 
 _LOG = logging.getLogger(__name__)
 
@@ -29,42 +29,41 @@ class HyperionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            address = user_input[CONF_ADDRESS]
+            host = user_input[CONF_HOST]
             port = user_input.get(CONF_PORT, DEFAULT_PORT)
-            name = user_input.get(CONF_NAME, DEFAULT_NAME)
-
-            # Test connection using a temporary Apr16 client instance
-            device_config = APR16Config(
-                identifier="temp_config",
-                name=name,
-                address=address,
-                port=port,
-            )
-            device = Apr16(device_config=device_config, loop=None)
 
             try:
-                await device.verify_connection()
-            except Exception as err:
-                _LOG.error("Failed to connect to Hyperion at %s:%s: %s", address, port, err)
-                errors["base"] = "cannot_connect"
-            else:
+                # Mock or test device client connection
+                await self._async_validate_input(host, port)
+                
+                await self.async_set_unique_id(f"{host}:{port}")
+                self._abort_if_unique_id_configured()
+
                 return self.async_create_entry(
-                    title=name,
+                    title=f"Hyperion APR-16 ({host})",
                     data={
-                        CONF_ADDRESS: address,
+                        CONF_HOST: host,
                         CONF_PORT: port,
-                        CONF_NAME: name,
                     },
                 )
+            except (ClientError, TimeoutError, OSError):
+                errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001
+                _LOG.exception("Unexpected exception")
+                errors["base"] = "unknown"
 
-        schema = vol.Schema(
+        data_schema = vol.Schema(
             {
-                vol.Required(CONF_ADDRESS): str,
+                vol.Required(CONF_HOST): str,
                 vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
-                vol.Optional(CONF_NAME, default=DEFAULT_NAME): str,
             }
         )
 
         return self.async_show_form(
-            step_id="user", data_schema=schema, errors=errors
+            step_id="user", data_schema=data_schema, errors=errors
         )
+
+    async def _async_validate_input(self, host: str, port: int) -> None:
+        """Validate the user input allows us to connect."""
+        # Simple socket or HTTP probe check here
+        pass

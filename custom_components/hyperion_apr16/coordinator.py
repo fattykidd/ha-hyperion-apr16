@@ -6,81 +6,47 @@ import logging
 from datetime import timedelta
 from typing import Any
 
+from aiohttp import ClientError
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from device import Apr16
+from .const import DOMAIN
 
 _LOG = logging.getLogger(__name__)
 
-UPDATE_INTERVAL = timedelta(seconds=5)
-
 
 class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Class to manage fetching AudioControl Hyperion data from the device."""
+    """Class to manage fetching Hyperion data central polling."""
 
-    def __init__(self, hass: HomeAssistant, device: Apr16) -> None:
-        """Initialize coordinator."""
-        self.device = device
+    def __init__(self, hass: HomeAssistant, device: Any) -> None:
+        """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOG,
-            name="Hyperion APR-16",
-            update_interval=UPDATE_INTERVAL,
+            name=DOMAIN,
+            update_interval=timedelta(seconds=5),
         )
+        self.device = device
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from the APR-16 processor."""
+        """Fetch data from the Hyperion APR-16 processor."""
+        data: dict[str, Any] = {}
         try:
-            # Verify/refresh connection and update internal attributes
-            await self.device.verify_connection()
-
-            # Gather additional telemetry states in a single dictionary for entities
-            power_state = self.device.state
-            volume = await self.device.get_volume()
-            mute = await self.device.get_mute()
-            active_input = await self.device.get_active_input()
-            brightness = await self.device.get_display_brightness()
-            host_ip = await self.device.get_host_ip()
+            data["power"] = await self.device.get_power()
+            data["volume"] = await self.device.get_volume()
+            data["mute"] = await self.device.get_mute()
+            data["active_input"] = await self.device.get_active_input()
+            data["audio_format"] = await self.device.get_audio_format()
+            data["audio_mode"] = await self.device.get_audio_mode()
+            data["video_detail"] = await self.device.get_video_detail()
+            data["brightness"] = await self.device.get_display_brightness()
+            data["host_ip"] = getattr(self.device, "host", None)
             
-            # Fetch optional details safely
-            try:
-                audio_format = await self.device.get_audio_format()
-            except Exception:
-                audio_format = "Unknown"
-
-            try:
-                video_detail = await self.device.get_video_detail()
-            except Exception:
-                video_detail = {}
-
-            try:
-                audio_detail = await self.device.get_audio_detail()
-            except Exception:
-                audio_detail = {}
-
-            try:
-                bass = await self.device.get_input_bass(active_input or "HDMI 1")
-            except Exception:
-                bass = 0
-
-            try:
-                treble = await self.device.get_input_treble(active_input or "HDMI 1")
-            except Exception:
-                treble = 0
-
-            return {
-                "power": power_state,
-                "volume": volume,
-                "mute": mute,
-                "active_input": active_input,
-                "brightness": brightness,
-                "host_ip": host_ip,
-                "audio_format": audio_format,
-                "video_detail": video_detail,
-                "audio_detail": audio_detail,
-                "bass": bass,
-                "treble": treble,
-            }
-        except Exception as err:
+            # Retrieve active input bass/treble if available
+            if data.get("active_input"):
+                data["bass"] = await self.device.get_input_bass(data["active_input"])
+                data["treble"] = await self.device.get_input_treble(data["active_input"])
+            
+            return data
+        except (ClientError, TimeoutError, OSError) as err:
             raise UpdateFailed(f"Error communicating with Hyperion APR-16: {err}") from err

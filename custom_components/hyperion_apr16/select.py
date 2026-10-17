@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aiohttp import ClientError
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -59,5 +60,5 @@ class HyperionAudioModeSelect(CoordinatorEntity, SelectEntity):
         try:
             await self._device.set_audio_mode(option)
             await self.coordinator.async_request_refresh()
-        except Exception as err:
+        except (ClientError, OSError) as err:
             _LOG.error("Failed to set audio mode to %s: %s", option, err)
