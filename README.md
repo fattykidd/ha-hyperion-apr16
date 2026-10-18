@@ -35,7 +35,7 @@ Input your Apr-16 IP-address with port and after about 10-15 seconds sensors sho
 
 ## Screenshots In Action
 
-
+![Screenshot 2](assets/pic.png)
 
 ## Acknowledgements and Attributions 
 
