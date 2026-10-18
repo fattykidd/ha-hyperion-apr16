@@ -1,4 +1,4 @@
-![Screenshot 1](assets/Wallpaper2.png)
+![Screenshot 1](assets/hyperion.png)
 ## Home Assistant integration for the AudioControl Hyperion Apr16
 
 [![GitHub Release](https://img.shields.io/github/v/release/fattykidd/ha-hyperion-apr16?style=flat-square&color=blue)](https://github.com/fattykidd/ha-hyperion-apr16/releases)
@@ -23,7 +23,7 @@ Assistant](https://www.home-assistant.io/) integration for the [Hyperion Apr-16]
 
 ### Manual installation (alternative)
 
-Copy the `hyperion_apr16` directory from a downloaded release .zip into the `custom_components` directory under your Home Assistant configuration directory, and restart Home Assistant. Then follow step 6 above to add the integration via the UI.
+Copy the `hyperion_apr16` directory from the downloaded .zip file into the `custom_components` directory of your Home Assistant configuration directory, and restart Home Assistant. Then return to step 6 above and add the integration via the UI.
 
 Input your Apr-16 IP-address with port and after about 10-15 seconds sensors should appear and update.
 
@@ -31,13 +31,13 @@ Input your Apr-16 IP-address with port and after about 10-15 seconds sensors sho
 
 **Via HACS:** HACS will show an update notification when a new version is released; click **Update**, then restart Home Assistant.
 
-**Manual:** Delete the old `hyperion_apr16` directory from `custom components`, copy the new `hyperion_apr16` folder from the updated release .zip into `custom_components`, and restart Home Assistant.
+**Manual:** Delete the old `hyperion_apr16` directory from `custom components`, copy the new `hyperion_apr16` folder from the updated .zip file into `custom_components`, and restart Home Assistant.
 
 ## Screenshots In Action
 
 
 
-## Credits
+## Acknowledgements and Attributions 
 
 * **[Home Assistant](https://www.home-assistant.io/)** — For providing an incredible, extensible open-source home automation platform.
 * **[AudioControl](https://www.audiocontrol.com/)** — For crafting phenomenal home theater processing hardware.
