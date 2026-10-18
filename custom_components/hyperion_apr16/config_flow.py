@@ -1,4 +1,4 @@
-"""Config flow for AudioControl Hyperion APR-16 integration."""
+"""Config flow for AudioControl Hyperion APR-16."""
 
 from __future__ import annotations
 
@@ -6,14 +6,23 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from aiohttp import ClientError
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.const import CONF_ADDRESS, CONF_NAME, CONF_PORT
 from homeassistant.data_entry_flow import FlowResult
 
+from .config import APR16Config
 from .const import DEFAULT_PORT, DOMAIN
+from .device import Apr16
 
-_LOG = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
+
+DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_ADDRESS): str,
+        vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+        vol.Optional(CONF_NAME, default="Hyperion APR-16"): str,
+    }
+)
 
 
 class HyperionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -24,44 +33,27 @@ class HyperionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the initial step."""
+        """Handle the initial user step."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            host = user_input[CONF_HOST]
-            port = user_input.get(CONF_PORT, DEFAULT_PORT)
+            config = APR16Config(
+                identifier="temp",
+                name=user_input.get(CONF_NAME, "Hyperion APR-16"),
+                address=user_input[CONF_ADDRESS],
+                port=user_input[CONF_PORT],
+            )
+            device = Apr16(device_config=config, loop=self.hass.loop)
 
-            try:
-                # Mock or test device client connection
-                await self._async_validate_input(host, port)
-                
-                await self.async_set_unique_id(f"{host}:{port}")
-                self._abort_if_unique_id_configured()
-
+            if await device.async_connect():
                 return self.async_create_entry(
-                    title=f"Hyperion APR-16 ({host})",
-                    data={
-                        CONF_HOST: host,
-                        CONF_PORT: port,
-                    },
+                    title=user_input.get(CONF_NAME, "Hyperion APR-16"),
+                    data=user_input,
                 )
-            except (ClientError, TimeoutError, OSError):
-                errors["base"] = "cannot_connect"
-            except Exception:  # noqa: BLE001
-                _LOG.exception("Unexpected exception")
-                errors["base"] = "unknown"
-
-        data_schema = vol.Schema(
-            {
-                vol.Required(CONF_HOST): str,
-                vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
-            }
-        )
+            errors["base"] = "cannot_connect"
 
         return self.async_show_form(
-            step_id="user", data_schema=data_schema, errors=errors
+            step_id="user",
+            data_schema=DATA_SCHEMA,
+            errors=errors,
         )
-
-    async def _async_validate_input(self, host: str, port: int) -> None:
-        """Validate the user input allows us to connect."""
-        # Simple socket or HTTP probe check here

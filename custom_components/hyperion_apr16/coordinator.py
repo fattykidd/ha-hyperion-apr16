@@ -41,12 +41,16 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data["video_detail"] = await self.device.get_video_detail()
             data["brightness"] = await self.device.get_display_brightness()
             data["host_ip"] = getattr(self.device, "host", None)
-            
+
             # Retrieve active input bass/treble if available
             if data.get("active_input"):
                 data["bass"] = await self.device.get_input_bass(data["active_input"])
-                data["treble"] = await self.device.get_input_treble(data["active_input"])
-            
+                data["treble"] = await self.device.get_input_treble(
+                    data["active_input"]
+                )
+
             return data
         except (ClientError, TimeoutError, OSError) as err:
-            raise UpdateFailed(f"Error communicating with Hyperion APR-16: {err}") from err
+            raise UpdateFailed(
+                f"Error communicating with Hyperion APR-16: {err}"
+            ) from err

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from config import APR16Config
-from device import Apr16
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, CONF_NAME, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
 
+from . import device as apr_device
+from .config import APR16Config
 from .const import DEFAULT_PORT, DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
 
@@ -30,14 +30,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
     name = entry.data.get(CONF_NAME, "Hyperion APR-16")
 
-    # Initialize your existing device communication class
+    # Initialize your device communication class dynamically
     device_config = APR16Config(
         identifier=entry.entry_id,
         name=name,
         address=address,
         port=port,
     )
-    device = Apr16(device_config=device_config, loop=hass.loop)
+    device = apr_device.Apr16(device_config=device_config, loop=hass.loop)
 
     # Initialize the coordinator
     coordinator = HyperionDataUpdateCoordinator(hass, device)

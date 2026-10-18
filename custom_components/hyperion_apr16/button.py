@@ -177,7 +177,9 @@ class HyperionBrightnessDownButton(HyperionBaseButton):
     """Button to decrease display brightness by 10%."""
 
     def __init__(self, coordinator, device, entry):
-        super().__init__(coordinator, device, entry, "brightness_down", "Brightness -10%")
+        super().__init__(
+            coordinator, device, entry, "brightness_down", "Brightness -10%"
+        )
 
     async def async_press(self) -> None:
         """Handle the data and button press."""

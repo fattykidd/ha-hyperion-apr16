@@ -65,10 +65,9 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def state(self) -> MediaPlayerState | None:
         """Return the state of the device."""
-        power = self.coordinator.data.get("power", "OFF")
-        if power == "ON":
-            return MediaPlayerState.ON
-        return MediaPlayerState.OFF
+        if not self.coordinator.data or not self.coordinator.data.get("power", False):
+            return MediaPlayerState.OFF
+        return MediaPlayerState.ON
 
     @property
     def volume_level(self) -> float | None:

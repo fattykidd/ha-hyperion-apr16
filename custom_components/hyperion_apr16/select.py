@@ -17,7 +17,14 @@ from .coordinator import HyperionDataUpdateCoordinator
 
 _LOG = logging.getLogger(__name__)
 
-AUDIO_MODES = ["Auto", "Stereo", "Dolby Surround", "DTS Neural:X", "Direct", "Pure Audio"]
+AUDIO_MODES = [
+    "Auto",
+    "Stereo",
+    "Dolby Surround",
+    "DTS Neural:X",
+    "Direct",
+    "Pure Audio",
+]
 
 
 async def async_setup_entry(
