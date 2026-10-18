@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
 This repo provides a [Home
-Assistant](https://www.home-assistant.io/) integration for the [Hyperion Apr-16](https://www.avproglobal.com/products/acp-hype-apr-16) Immersive Sound Pre-Amp Processor.
+Assistant](https://www.home-assistant.io/) integration for the [Hyperion Apr-16](https://www.avproglobal.com/products/acp-hype-apr-16) Immersive Sound Pre-Amp Processor. This integration may be extended with a [Custom Lovelace Card](https://github.com/fattykidd/ha-hyperion-apr16-card)
 
 
 ## Installation
