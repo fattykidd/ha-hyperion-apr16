@@ -1,9 +1,12 @@
-"""Async client for AudioControl Hyperion APR-16."""
+"""Async REST client for AudioControl Hyperion APR-16."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
+
+import aiohttp
 
 from .config import APR16Config
 
@@ -104,7 +107,7 @@ class Apr16:
                 async with session.get(f"{self._base_url}{endpoint}", timeout=2) as resp:
                     if resp.status == 200:
                         return await resp.json()
-            except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            except (TimeoutError, aiohttp.ClientError, OSError) as err:
                 _LOGGER.debug("Endpoint %s unavailable or failed: %s", endpoint, err)
             return None
 
