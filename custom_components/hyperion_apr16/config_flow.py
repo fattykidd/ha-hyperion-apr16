@@ -43,7 +43,7 @@ class HyperionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 address=user_input[CONF_ADDRESS],
                 port=user_input[CONF_PORT],
             )
-            device = Apr16(device_config=config, loop=self.hass.loop)
+            device = Apr16(device_config=config)
 
             if await device.async_connect():
                 return self.async_create_entry(
