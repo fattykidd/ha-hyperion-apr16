@@ -104,8 +104,8 @@ class Apr16:
                 async with session.get(f"{self._base_url}{endpoint}", timeout=2) as resp:
                     if resp.status == 200:
                         return await resp.json()
-            except Exception:
-                pass
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+                _LOGGER.debug("Endpoint %s unavailable or failed: %s", endpoint, err)
             return None
 
         # Fetch all resource states concurrently with your exact API paths
