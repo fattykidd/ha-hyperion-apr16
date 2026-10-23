@@ -16,12 +16,9 @@ _LOGGER = logging.getLogger(__name__)
 class Apr16:
     """Async REST client for the AudioControl Hyperion APR-16 processor."""
 
-    def __init__(
-        self, device_config: APR16Config, loop: asyncio.AbstractEventLoop
-    ) -> None:
+    def __init__(self, device_config: APR16Config) -> None:
         """Initialize the device client."""
         self._config = device_config
-        self._loop = loop
         self._base_url = f"http://{device_config.address}:{device_config.port}"
         self._session: aiohttp.ClientSession | None = None
 
@@ -62,18 +59,10 @@ class Apr16:
         return False
 
     async def async_disconnect(self) -> None:
-        """Clean up HTTP session."""
+        """Clean up HTTP session cleanly."""
         if self._session and not self._session.closed:
             await self._session.close()
             self._session = None
-
-    async def async_power_on(self) -> None:
-        """Turn the processor power on."""
-        await self._send_request("POST", "/v1/power/on")
-
-    async def async_power_off(self) -> None:
-        """Turn the processor power off."""
-        await self._send_request("POST", "/v1/power/off")
 
     async def _send_request(
         self, method: str, endpoint: str, json_data: dict | None = None
@@ -109,7 +98,7 @@ class Apr16:
                 _LOGGER.debug("Endpoint %s unavailable or failed: %s", endpoint, err)
             return None
 
-        # Fetch all resource states concurrently with your exact API paths
+        # Fetch all resource states concurrently
         (
             power_res,
             vol_res,
@@ -128,7 +117,7 @@ class Apr16:
             fetch_endpoint("/v1/temperature"),
         )
 
-        # 1. Parse Power
+        # Parse responses safely
         power = False
         if isinstance(power_res, dict):
             val = power_res.get(
@@ -136,7 +125,6 @@ class Apr16:
             )
             power = str(val) in ("1", "true", "True", "ON", "on")
 
-        # 2. Parse Volume
         volume = 0.0
         if isinstance(vol_res, dict):
             try:
@@ -147,7 +135,6 @@ class Apr16:
             except (ValueError, TypeError):
                 pass
 
-        # 3. Parse Mute
         mute = False
         if isinstance(mute_res, dict):
             val = mute_res.get(
@@ -155,7 +142,6 @@ class Apr16:
             )
             mute = str(val) in ("1", "true", "True", "ON", "on", "yes", "YES")
 
-        # 4. Parse Active Input
         active_input = "Unknown"
         if isinstance(input_res, dict):
             active_input = str(

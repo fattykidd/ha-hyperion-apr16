@@ -37,7 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         address=address,
         port=port,
     )
-    device = apr_device.Apr16(device_config=device_config, loop=hass.loop)
+    device = apr_device.Apr16(device_config=device_config)
 
     # Initialize the coordinator
     coordinator = HyperionDataUpdateCoordinator(hass, device)
