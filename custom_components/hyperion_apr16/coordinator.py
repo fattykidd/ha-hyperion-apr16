@@ -30,27 +30,15 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the Hyperion APR-16 processor."""
-        data: dict[str, Any] = {}
         try:
-            data["power"] = await self.device.get_power()
-            data["volume"] = await self.device.get_volume()
-            data["mute"] = await self.device.get_mute()
-            data["active_input"] = await self.device.get_active_input()
-            data["audio_format"] = await self.device.get_audio_format()
-            data["audio_mode"] = await self.device.get_audio_mode()
-            data["video_detail"] = await self.device.get_video_detail()
-            data["brightness"] = await self.device.get_display_brightness()
+            # Fetch base status dict directly from Apr16 client in device.py
+            data = await self.device.async_get_status()
+
+            # Attach device property metadata
             data["host_ip"] = getattr(self.device, "host", None)
 
-            # Retrieve active input bass/treble if available
-            if data.get("active_input"):
-                data["bass"] = await self.device.get_input_bass(data["active_input"])
-                data["treble"] = await self.device.get_input_treble(
-                    data["active_input"]
-                )
-
             return data
-        except (ClientError, TimeoutError, OSError) as err:
+        except (ClientError, TimeoutError, OSError, Exception) as err:
             raise UpdateFailed(
                 f"Error communicating with Hyperion APR-16: {err}"
             ) from err
