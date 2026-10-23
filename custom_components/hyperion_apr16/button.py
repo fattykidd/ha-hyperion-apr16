@@ -63,7 +63,7 @@ class HyperionBaseButton(CoordinatorEntity, ButtonEntity):
         if not isinstance(host, str) or not host:
             host = entry.entry_id
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, host)},
+            "identifiers": {(DOMAIN, entry.entry_id)},
             "name": entry.title,
             "manufacturer": "AudioControl",
             "model": "Hyperion APR-16",
