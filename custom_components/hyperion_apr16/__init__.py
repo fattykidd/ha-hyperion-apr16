@@ -20,6 +20,7 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.MEDIA_PLAYER,
     Platform.SELECT,
+    Platform.BUTTON,
 ]
 
 

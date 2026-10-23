@@ -64,7 +64,7 @@ class HyperionPowerSwitch(HyperionBaseSwitch):
     @property
     def is_on(self) -> bool:
         """Return True if processor is powered on."""
-        return self.coordinator.data.get("power") == "ON"
+        return bool(self.coordinator.data.get("power", False))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the processor on."""

@@ -1,184 +1,94 @@
-"""Async REST client for AudioControl Hyperion APR-16."""
+"""API client for AudioControl Hyperion APR-16 processor."""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
-import aiohttp
+from aiohttp import ClientSession, ClientError
 
-from .config import APR16Config
-
-_LOGGER = logging.getLogger(__name__)
+_LOG = logging.getLogger(__name__)
 
 
 class Apr16:
-    """Async REST client for the AudioControl Hyperion APR-16 processor."""
+    """Async REST API client for AudioControl Hyperion APR-16."""
 
-    def __init__(self, device_config: APR16Config) -> None:
-        """Initialize the device client."""
-        self._config = device_config
-        self._base_url = f"http://{device_config.address}:{device_config.port}"
-        self._session: aiohttp.ClientSession | None = None
+    def __init__(self, host: str, port: int = 8080, session: ClientSession | None = None) -> None:
+        """Initialize the client."""
+        self.host = host
+        self.port = port
+        self._session = session
+        self._base_url = f"http://{host}:{port}"
 
-    @property
-    def name(self) -> str:
-        """Return the device name."""
-        return self._config.name
+    async def _send_request(self, method: str, endpoint: str, data: dict[str, Any] | None = None) -> Any:
+        """Send an HTTP request to the APR-16 API."""
+        if self._session is None:
+            self._session = ClientSession()
 
-    @property
-    def host(self) -> str:
-        """Return the device host/ip address."""
-        return self._config.address
-
-    @property
-    def port(self) -> int:
-        """Return the device port."""
-        return self._config.port
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create an aiohttp client session."""
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
-        return self._session
-
-    async def async_connect(self) -> bool:
-        """Verify connectivity to the processor REST API."""
-        try:
-            session = await self._get_session()
-            async with session.get(f"{self._base_url}/v1/status", timeout=5) as response:
-                if response.status == 200:
-                    _LOGGER.info(
-                        "Connected to AudioControl Hyperion APR-16 REST API at %s",
-                        self._base_url,
-                    )
-                    return True
-        except (aiohttp.ClientError, TimeoutError, OSError) as err:
-            _LOGGER.error("Failed to connect to Hyperion APR-16 REST API: %s", err)
-        return False
-
-    async def async_disconnect(self) -> None:
-        """Clean up HTTP session cleanly."""
-        if self._session and not self._session.closed:
-            await self._session.close()
-            self._session = None
-
-    async def _send_request(
-        self, method: str, endpoint: str, json_data: dict | None = None
-    ) -> Any:
-        """Send an HTTP request to the processor."""
-        session = await self._get_session()
         url = f"{self._base_url}{endpoint}"
         try:
-            async with session.request(
-                method, url, json=json_data, timeout=5
-            ) as response:
+            async with self._session.request(method, url, json=data, timeout=10) as response:
                 response.raise_for_status()
                 if response.content_type == "application/json":
                     return await response.json()
                 return await response.text()
-        except (aiohttp.ClientError, TimeoutError) as err:
-            _LOGGER.error("Error executing %s on %s: %s", method, url, err)
+        except (ClientError, TimeoutError, OSError) as err:
+            _LOG.error("API request failed for %s: %s", url, err)
             raise
 
-    async def async_get_status(self) -> dict:
-        """Fetch current status/state dictionary from the device via REST API endpoints."""
-        session = await self._get_session()
-
-        async def fetch_endpoint(endpoint: str) -> Any:
-            """Helper to safely fetch a single resource endpoint."""
-            try:
-                async with session.get(
-                    f"{self._base_url}{endpoint}", timeout=2
-                ) as resp:
-                    if resp.status == 200:
-                        return await resp.json()
-            except (aiohttp.ClientError, TimeoutError, OSError) as err:
-                _LOGGER.debug("Endpoint %s unavailable or failed: %s", endpoint, err)
-            return None
-
-        # Fetch all resource states concurrently
-        (
-            power_res,
-            vol_res,
-            mute_res,
-            input_res,
-            mode_res,
-            bright_res,
-            temp_res,
-        ) = await asyncio.gather(
-            fetch_endpoint("/v1/power"),
-            fetch_endpoint("/v1/vol"),
-            fetch_endpoint("/v1/mute"),
-            fetch_endpoint("/v1/input"),
-            fetch_endpoint("/v1/audiomode"),
-            fetch_endpoint("/v1/displaybrightness"),
-            fetch_endpoint("/v1/temperature"),
-        )
+    async def async_get_status(self) -> dict[str, Any]:
+        """Fetch comprehensive system status."""
+        power_res = await self._send_request("GET", "/v1/power")
+        vol_res = await self._send_request("GET", "/v1/vol")
+        mute_res = await self._send_request("GET", "/v1/mute")
+        input_res = await self._send_request("GET", "/api/atlas/input/active")
+        audio_mode_res = await self._send_request("GET", "/v1/audiomode")
+        brightness_res = await self._send_request("GET", "/v1/displaybrightness")
+        trigger_res = await self._send_request("GET", "/v1/trigger/output")
+        audio_format_res = await self._send_request("GET", "/v1/audioformat")
+        video_detail_res = await self._send_request("GET", "/v1/videodetail")
 
         # Parse responses safely
         power = False
         if isinstance(power_res, dict):
-            val = power_res.get(
-                "state", power_res.get("value", power_res.get("status", False))
-            )
-            power = str(val) in ("1", "true", "True", "ON", "on")
+            power = str(power_res.get("state", "")).lower() == "on"
 
         volume = 0.0
         if isinstance(vol_res, dict):
-            try:
-                val = vol_res.get(
-                    "level", vol_res.get("state", vol_res.get("value", 0.0))
-                )
-                volume = float(val)
-            except (ValueError, TypeError):
-                pass
+            volume = float(vol_res.get("level", 0.0))
 
         mute = False
         if isinstance(mute_res, dict):
-            val = mute_res.get(
-                "state", mute_res.get("level", mute_res.get("value", False))
-            )
-            mute = str(val) in ("1", "true", "True", "ON", "on", "yes", "YES")
+            mute = bool(mute_res.get("state", mute_res.get("mute", False)))
 
-        active_input = "Unknown"
+        active_input = "HDMI 1"
         if isinstance(input_res, dict):
-            active_input = str(
-                input_res.get(
-                    "name", input_res.get("state", input_res.get("value", "Unknown"))
-                )
-            )
+            active_input = input_res.get("name", "HDMI 1")
 
-        # 5. Parse Audio Mode
         audio_mode = "Auto"
-        if isinstance(mode_res, dict):
-            audio_mode = str(
-                mode_res.get(
-                    "mode", mode_res.get("state", mode_res.get("value", "Auto"))
-                )
-            )
+        if isinstance(audio_mode_res, dict):
+            audio_mode = audio_mode_res.get("mode", "Auto")
 
-        # 6. Parse Brightness
-        brightness = 80
-        if isinstance(bright_res, dict):
-            try:
-                val = bright_res.get(
-                    "brightness",
-                    bright_res.get("level", bright_res.get("state", 80)),
-                )
-                brightness = int(val)
-            except (ValueError, TypeError):
-                pass
+        brightness = 50
+        if isinstance(brightness_res, dict):
+            brightness = int(brightness_res.get("level", 50))
 
-        # 7. Parse Temperature
-        temperature = 0.0
-        if isinstance(temp_res, dict):
-            try:
-                val = temp_res.get("temperature", temp_res.get("state", 0.0))
-                temperature = float(val)
-            except (ValueError, TypeError):
-                pass
+        trigger_state = False
+        if isinstance(trigger_res, dict):
+            val = trigger_res.get("state", trigger_res.get("value", False))
+            trigger_state = str(val) in ("1", "true", "True", "ON", "on")
+
+        audio_format = "PCM"
+        if isinstance(audio_format_res, dict):
+            audio_format = audio_format_res.get("format", audio_format_res.get("codec", "PCM"))
+        elif isinstance(audio_format_res, str):
+            audio_format = audio_format_res
+
+        video_detail = "Unknown"
+        if isinstance(video_detail_res, dict):
+            video_detail = video_detail_res.get("resolution", "Unknown")
+        elif isinstance(video_detail_res, str):
+            video_detail = video_detail_res
 
         return {
             "power": power,
@@ -187,5 +97,72 @@ class Apr16:
             "active_input": active_input,
             "audio_mode": audio_mode,
             "brightness": brightness,
-            "temperature": temperature,
+            "trigger_state": trigger_state,
+            "audio_format": audio_format,
+            "video_detail": video_detail,
+            "temperature": None,  # Optional/placeholder if not exposed by endpoint
         }
+
+    async def power_on(self) -> None:
+        """Turn the processor power on[cite: 1]."""
+        await self._send_request("POST", "/v1/power", {"state": "on"})
+
+    async def power_off(self) -> None:
+        """Turn the processor power off[cite: 1]."""
+        await self._send_request("POST", "/v1/power", {"state": "off"})
+
+    async def set_volume(self, level: float) -> None:
+        """Set volume level (0-100)[cite: 1]."""
+        await self._send_request("POST", "/v1/vol", {"level": level})
+
+    async def set_mute(self, mute: bool) -> None:
+        """Set mute state[cite: 1]."""
+        await self._send_request("POST", "/v1/mute", {"state": mute})
+
+    async def set_active_input(self, source: str) -> None:
+        """Set active input source[cite: 2]."""
+        await self._send_request("POST", "/api/atlas/input/active", {"name": source})
+
+    async def set_audio_mode(self, mode: str) -> None:
+        """Set the audio processing mode[cite: 3]."""
+        await self._send_request("POST", "/v1/audiomode", {"mode": mode})
+
+    async def reboot(self) -> None:
+        """Reboot the processor[cite: 1]."""
+        await self._send_request("POST", "/v1/reboot")
+
+    async def trigger_hpd(self) -> None:
+        """Trigger Hot Plug Detect (HPD) for EDID/display refresh[cite: 4]."""
+        await self._send_request("POST", "/v1/hdmi/output/hpd")
+
+    async def set_trigger(self, state: bool) -> None:
+        """Enable or disable 12V trigger output[cite: 1]."""
+        await self._send_request("POST", "/v1/trigger/output", {"state": state})
+
+    async def get_input_bass(self, name: str) -> float:
+        """Get bass level for a specific input source (-12 to +12 dB)[cite: 2]."""
+        res = await self._send_request("GET", f"/api/atlas/input/{name}/bass/")
+        if isinstance(res, dict):
+            return float(res.get("bass", res.get("level", 0.0)))
+        return 0.0
+
+    async def set_input_bass(self, name: str, level: float) -> None:
+        """Set bass level for a specific input source[cite: 2]."""
+        await self._send_request("POST", f"/api/atlas/input/{name}/bass/{level}")
+
+    async def get_input_treble(self, name: str) -> float:
+        """Get treble level for a specific input source (-12 to +12 dB)[cite: 2]."""
+        res = await self._send_request("GET", f"/api/atlas/input/{name}/treb/")
+        if isinstance(res, dict):
+            return float(res.get("treble", res.get("level", 0.0)))
+        return 0.0
+
+    async def set_input_treble(self, name: str, level: float) -> None:
+        """Set treble level for a specific input source[cite: 2]."""
+        await self._send_request("POST", f"/api/atlas/input/{name}/treb/{level}")
+
+    async def set_display_brightness(self, level: int) -> None:
+        """Set front panel display brightness percentage[cite: 4]."""
+        await self._send_request("POST", "/v1/displaybrightness", {"level": level})
+
+    
