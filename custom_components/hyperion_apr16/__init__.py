@@ -5,15 +5,15 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ADDRESS, CONF_NAME, CONF_PORT, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from . import device as apr_device
 from .config import APR16Config
-from .const import DEFAULT_PORT, DOMAIN
+from .const import DOMAIN
+from .device import Apr16  # Import Apr16 directly
 from .coordinator import HyperionDataUpdateCoordinator
 
-_LOG = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.MEDIA_PLAYER,
@@ -32,7 +32,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Initialize your device communication class dynamically
     device_config = APR16Config(
-        identifier=entry.entry_id,
         name=name,
         address=address,
         port=port,
