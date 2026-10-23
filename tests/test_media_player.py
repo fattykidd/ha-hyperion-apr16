@@ -36,7 +36,7 @@ async def test_media_player_entity(hass: HomeAssistant) -> None:
                 "brightness": 80,
             },
         ),
-        patch("custom_components.hyperion_apr16.device.Apr16") as mock_client_class,
+        patch("custom_components.hyperion_apr16.Apr16") as mock_client_class
     ):
         mock_client = mock_client_class.return_value
         mock_client.async_connect = AsyncMock(return_value=True)
