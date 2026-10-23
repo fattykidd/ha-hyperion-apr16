@@ -58,8 +58,11 @@ class HyperionBaseSensor(CoordinatorEntity[HyperionDataUpdateCoordinator], Senso
     ) -> None:
         """Initialize the base sensor."""
         super().__init__(coordinator)
+        host = getattr(coordinator.device, "host", None)
+        if not isinstance(host, str) or not host:
+            host = entry.entry_id
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, coordinator.device.host)},
+            "identifiers": {(DOMAIN, host)},
             "name": entry.title,
             "manufacturer": "AudioControl",
             "model": "Hyperion APR-16",
@@ -141,7 +144,7 @@ class HyperionRelativeVolumeSensor(HyperionBaseSensor):
                 percent = float(val)
                 if percent <= 0:
                     return -80.0
-                
+
                 # Logarithmic conversion calibrated such that 14% = -61.5 dB
                 db = 20 * math.log10(percent / 100.0) * 3.6
                 return round(max(db, -80.0), 1)
