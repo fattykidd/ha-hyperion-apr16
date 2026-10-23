@@ -15,7 +15,13 @@ from .device import Apr16  # Import Apr16 directly
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.MEDIA_PLAYER,
+    Platform.SELECT,
+]
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AudioControl Hyperion APR-16 from a config entry."""
@@ -30,7 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         address=host,
         port=port,
     )
-    
+
     device = Apr16(device_config=device_config)
 
     # Initialize the coordinator...
