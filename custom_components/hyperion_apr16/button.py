@@ -58,12 +58,17 @@ class HyperionBaseButton(CoordinatorEntity, ButtonEntity):
         self._device = device
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_name = f"{entry.title} {name_suffix}"
+
+        host = getattr(coordinator.device, "host", None)
+        if not isinstance(host, str) or not host:
+            host = entry.entry_id
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, coordinator.device.host)},
+            "identifiers": {(DOMAIN, host)},
             "name": entry.title,
             "manufacturer": "AudioControl",
             "model": "Hyperion APR-16",
         }
+
 
 class HyperionRebootButton(HyperionBaseButton):
     """Button to reboot the processor."""
