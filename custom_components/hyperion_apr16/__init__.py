@@ -15,30 +15,24 @@ from .coordinator import HyperionDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [
-    Platform.MEDIA_PLAYER,
-    Platform.SENSOR,
-    Platform.SELECT,
-    Platform.BUTTON,
-    Platform.SWITCH,
-]
-
+PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AudioControl Hyperion APR-16 from a config entry."""
-    address = entry.data[CONF_ADDRESS]
-    port = entry.data.get(CONF_PORT, DEFAULT_PORT)
-    name = entry.data.get(CONF_NAME, "Hyperion APR-16")
+    host = entry.data["host"]
+    port = entry.data["port"]
+    name = entry.data["name"]
 
-    # Initialize your device communication class dynamically
     device_config = APR16Config(
         name=name,
-        address=address,
+        address=host,
         port=port,
     )
+    
+    # This now correctly uses the direct import
     device = Apr16(device_config=device_config)
 
-    # Initialize the coordinator
+    # Initialize the coordinator...
     coordinator = HyperionDataUpdateCoordinator(hass, device)
 
     # Perform initial refresh to make sure device is online
