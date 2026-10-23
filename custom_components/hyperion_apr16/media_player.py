@@ -49,6 +49,12 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         self._attr_unique_id = f"{entry.entry_id}_media_player"
         self._attr_name = entry.title
         self._attr_device_class = "receiver"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": entry.title,
+            "manufacturer": "AudioControl",
+            "model": "Hyperion APR-16",
+        }
 
     @property
     def supported_features(self) -> MediaPlayerEntityFeature:
@@ -73,11 +79,7 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     def volume_level(self) -> float | None:
         """Return the volume level (0.0 to 1.0 mapped from dB or raw)."""
         vol = self.coordinator.data.get("volume", 0.0)
-        # Home Assistant expects volume level as a float between 0.0 and 1.0.
-        # Assuming volume from device is in dB (e.g., -80.0 to 0.0) or percentage.
-        # Adjust conversion based on your device.py implementation.
         try:
-            # Simple normalization example if volume is stored as dB
             return max(0.0, min(1.0, (float(vol) + 80.0) / 80.0))
         except (ValueError, TypeError):
             return 0.0
@@ -95,8 +97,19 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def source_list(self) -> list[str] | None:
         """List of available input sources."""
-        # You can map your physical inputs here or pull them from device capabilities
         return ["HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "Optical", "Coaxial", "Analog"]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return device-specific attributes for audio/video status and temp."""
+        data = self.coordinator.data or {}
+        return {
+            "audio_format": data.get("audio_format"),
+            "audio_detail": data.get("audio_detail"),
+            "video_detail": data.get("video_detail"),
+            "temperature": data.get("temperature"),
+            "audio_mode": data.get("audio_mode"),
+        }
 
     async def async_turn_on(self) -> None:
         """Turn the media player on."""
@@ -110,7 +123,6 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     async def async_set_volume_level(self, volume: float) -> None:
         """Set volume level, range 0.0 to 1.0."""
-        # Convert 0.0-1.0 float back to your device's volume scale
         db_val = -80.0 + (volume * 80.0)
         await self._device.set_volume(db_val)
         await self.coordinator.async_request_refresh()

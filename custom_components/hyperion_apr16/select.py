@@ -21,9 +21,9 @@ AUDIO_MODES = [
     "Auto",
     "Stereo",
     "Dolby Surround",
-    "DTS Neural:X",
+    "Dts Neural:X",
     "Direct",
-    "Pure Audio",
+    "Native",
 ]
 
 
@@ -56,16 +56,31 @@ class HyperionAudioModeSelect(CoordinatorEntity, SelectEntity):
         self._attr_name = f"{entry.title} Audio Mode"
         self._attr_options = AUDIO_MODES
 
+        host = getattr(coordinator.device, "host", None)
+        if not isinstance(host, str) or not host:
+            host = entry.entry_id
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": entry.title,
+            "manufacturer": "AudioControl",
+            "model": "Hyperion APR-16",
+        }
+
     @property
     def current_option(self) -> str | None:
         """Return the selected audio mode option."""
-        # You can tie this to a coordinator key if your device client exposes it
-        return self.coordinator.data.get("audio_mode", "Auto")
+        raw_mode = self.coordinator.data.get("audio_mode", "Auto")
+        # Normalize to match title case option strings safely
+        formatted_mode = str(raw_mode).title()
+        if formatted_mode in self._attr_options:
+            return formatted_mode
+        return "Auto"
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected audio mode."""
         try:
-            await self._device.set_audio_mode(option)
+            # Send lowercase or matching payload if the API expects it
+            await self._device.set_audio_mode(option.lower())
             await self.coordinator.async_request_refresh()
         except (ClientError, OSError) as err:
             _LOG.error("Failed to set audio mode to %s: %s", option, err)

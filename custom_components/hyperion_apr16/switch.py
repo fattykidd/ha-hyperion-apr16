@@ -38,7 +38,7 @@ async def async_setup_entry(
 
 
 class HyperionBaseSwitch(CoordinatorEntity, SwitchEntity):
-    """Base class for Hyperion switches."""
+    """Base class for Hyperion switches ensuring proper device grouping."""
 
     def __init__(
         self,
@@ -53,6 +53,12 @@ class HyperionBaseSwitch(CoordinatorEntity, SwitchEntity):
         self._device = device
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_name = f"{entry.title} {name_suffix}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, coordinator.device.host)},
+            "name": entry.title,
+            "manufacturer": "AudioControl",
+            "model": "Hyperion APR-16",
+        }
 
 
 class HyperionPowerSwitch(HyperionBaseSwitch):
@@ -111,7 +117,7 @@ class HyperionDisplayPowerSwitch(HyperionBaseSwitch):
         return self.coordinator.data.get("brightness", 0) > 0
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn front display on (set to standard brightness, e.g., 50%)."""
+        """Turn front display on (set to 50% brightness)."""
         await self._device.set_display_brightness(50)
         await self.coordinator.async_request_refresh()
 
