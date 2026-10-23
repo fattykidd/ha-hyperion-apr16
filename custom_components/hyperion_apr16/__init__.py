@@ -25,6 +25,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     name = entry.data.get("name", "AudioControl Hyperion APR-16")
 
     device_config = APR16Config(
+        identifier=entry.entry_id,  # Provide the required unique identifier
         name=name,
         address=host,
         port=port,
