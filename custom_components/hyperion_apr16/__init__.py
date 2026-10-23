@@ -10,8 +10,8 @@ from homeassistant.core import HomeAssistant
 
 from .config import APR16Config
 from .const import DOMAIN
-from .device import Apr16  # Import Apr16 directly
 from .coordinator import HyperionDataUpdateCoordinator
+from .device import Apr16  # Import Apr16 directly
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,9 +19,10 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AudioControl Hyperion APR-16 from a config entry."""
-    host = entry.data["host"]
-    port = entry.data["port"]
-    name = entry.data["name"]
+    # Support both "address" (used in tests) and "host" (used in config flow)
+    host = entry.data.get("address", entry.data.get("host"))
+    port = entry.data.get("port", 8080)
+    name = entry.data.get("name", "AudioControl Hyperion APR-16")
 
     device_config = APR16Config(
         name=name,
@@ -29,7 +30,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         port=port,
     )
     
-    # This now correctly uses the direct import
     device = Apr16(device_config=device_config)
 
     # Initialize the coordinator...
