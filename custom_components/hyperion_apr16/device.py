@@ -77,8 +77,8 @@ class Apr16:
                 temperature = float(temp_res.get("temperature", temp_res.get("level", 0.0)))
             elif isinstance(temp_res, (int, float)):
                 temperature = float(temp_res)
-        except Exception:
-            pass
+        except (ValueError, TypeError):
+            _LOG.warning("Failed to parse temperature value: %s", temp_res)
 
         audio_detail = "Unknown"
         try:
@@ -87,8 +87,8 @@ class Apr16:
                 audio_detail = audio_detail_res.get("detail", audio_detail_res.get("format", "Unknown"))
             elif isinstance(audio_detail_res, str):
                 audio_detail = audio_detail_res
-        except Exception:
-            pass
+        except (ValueError, TypeError):
+            _LOG.warning("Failed to parse audio detail value: %s", audio_detail_res)
 
         # Parse responses safely
         power = False
