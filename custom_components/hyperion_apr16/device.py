@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from aiohttp import ClientSession, ClientError
+from aiohttp import ClientError, ClientSession
+
+from .config import APR16Config
 
 _LOG = logging.getLogger(__name__)
 
@@ -13,12 +15,23 @@ _LOG = logging.getLogger(__name__)
 class Apr16:
     """Async REST API client for AudioControl Hyperion APR-16."""
 
-    def __init__(self, host: str, port: int = 8080, session: ClientSession | None = None) -> None:
-        """Initialize the client."""
-        self.host = host
-        self.port = port
+    def __init__(
+        self,
+        host: str | None = None,
+        port: int = 8080,
+        session: ClientSession | None = None,
+        device_config: APR16Config | None = None,
+    ) -> None:
+        """Initialize the client supporting both direct args and config dataclass."""
+        if device_config is not None:
+            self.host = device_config.address
+            self.port = device_config.port
+        else:
+            self.host = host or "localhost"
+            self.port = port
+
         self._session = session
-        self._base_url = f"http://{host}:{port}"
+        self._base_url = f"http://{self.host}:{self.port}"
 
     async def _send_request(self, method: str, endpoint: str, data: dict[str, Any] | None = None) -> Any:
         """Send an HTTP request to the APR-16 API."""
@@ -34,6 +47,16 @@ class Apr16:
                 return await response.text()
         except (ClientError, TimeoutError, OSError) as err:
             _LOG.error("API request failed for %s: %s", url, err)
+            raise
+
+    async def async_connect(self) -> bool:
+        """Test connection and verify reachability of the APR-16 processor."""
+        try:
+            # Query system version/status endpoint to validate connectivity
+            res = await self._send_request("GET", "/v1/version")
+            return res is not None
+        except Exception as err:
+            _LOG.error("Failed to connect to Hyperion APR-16 at %s: %s", self._base_url, err)
             raise
 
     async def async_get_status(self) -> dict[str, Any]:
@@ -100,7 +123,7 @@ class Apr16:
             "trigger_state": trigger_state,
             "audio_format": audio_format,
             "video_detail": video_detail,
-            "temperature": None,  # Optional/placeholder if not exposed by endpoint
+            "temperature": None,
         }
 
     async def power_on(self) -> None:
@@ -164,5 +187,3 @@ class Apr16:
     async def set_display_brightness(self, level: int) -> None:
         """Set front panel display brightness percentage[cite: 4]."""
         await self._send_request("POST", "/v1/displaybrightness", {"level": level})
-
-    
