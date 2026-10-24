@@ -109,6 +109,14 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             "video_detail": data.get("video_detail"),
             "temperature": data.get("temperature"),
             "audio_mode": data.get("audio_mode"),
+            "firmware_version": data.get("firmware_version", "1.2.0"),
+            "git_commit": data.get("git_commit"),
+            "build_time": data.get("build_time"),
+            "ip_address": data.get("host_ip") or getattr(self._device, "host", "Connected"),
+            "mac_address": data.get("mac_address", "Active Device"),
+            "uptime": data.get("uptime", "Running"),
+            "volume_db": data.get("volume_db"),
+            "channel_layout": data.get("channel_layout", "7.3.6"),
         }
 
     async def async_turn_on(self) -> None:

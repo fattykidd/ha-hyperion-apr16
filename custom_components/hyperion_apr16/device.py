@@ -308,3 +308,10 @@ class Apr16:
         async with self._session.get(url) as response:
             response.raise_for_status()
             return await response.json()
+
+    async def async_get_version(self) -> dict[str, Any]:
+        """Fetch firmware version from the device."""
+        url = f"http://{self._base_url}/v1/version"
+        async with self._session.get(url, headers={"Content-Type": "application/json"}) as resp:
+            resp.raise_for_status()
+            return await resp.json()

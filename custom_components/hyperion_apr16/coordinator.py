@@ -66,6 +66,14 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
                 _LOG.debug("Could not fetch lipsync delay for input %s: %s", input_id, err)
 
+            try:
+                version_resp = await self.device.async_get_version()
+                data["firmware_version"] = version_resp.get("version", "1.2.0")
+                data["git_commit"] = version_resp.get("gitCommit", "")
+                data["build_time"] = version_resp.get("buildTime", "")
+            except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+                _LOG.debug("Could not fetch version: %s", err)
+
             return data
         except (ClientError, TimeoutError, OSError, Exception) as err:
             raise UpdateFailed(
