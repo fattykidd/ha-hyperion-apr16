@@ -287,3 +287,24 @@ class Apr16:
         url = f"{self._base_url}/api/atlas/input/{input_id}/trim/{int(trim_val)}"
         async with self._session.post(url, json={"inputId": 0}) as response:
             response.raise_for_status()
+
+    async def async_get_trim(self, input_id: int) -> dict:
+        """Get input channel trim."""
+        url = f"{self._base_url}/api/atlas/input/{input_id}/trim"
+        async with self._session.get(url) as response:
+            response.raise_for_status()
+            return await response.json()
+
+    async def async_get_gain(self, input_id: int) -> dict:
+        """Get input gain."""
+        url = f"{self._base_url}/api/atlas/input/{input_id}/gain"
+        async with self._session.get(url) as response:
+            response.raise_for_status()
+            return await response.json()
+
+    async def async_get_lipsync(self, input_id: int) -> dict:
+        """Get input lipsync delay."""
+        url = f"{self._base_url}/api/atlas/input/{input_id}/lipsync"
+        async with self._session.get(url) as response:
+            response.raise_for_status()
+            return await response.json()

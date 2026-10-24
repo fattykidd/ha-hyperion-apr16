@@ -38,11 +38,33 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Attach device property metadata
             data["host_ip"] = getattr(self.device, "host", None)
 
-            # 2. Calculate the relative dB value and add it to the coordinator data
-            # (Checks whichever key your device status uses for the 0-100 percentage)
+            # Calculate volume dB
             vol_val = data.get("volume", data.get("level", 0.0))
             if vol_val is not None:
                 data["volume_db"] = round(percent_to_db(float(vol_val)), 1)
+
+            # Get the current active input ID (fallback to 1 if not present)
+            input_id = data.get("input_id", data.get("active_input_id", 1))
+            data["input_id"] = input_id
+
+            # Fetch live per-input audio settings from GET endpoints safely
+            try:
+                trim_resp = await self.device.async_get_trim(input_id)
+                data["channel_trim"] = float(trim_resp.get("level", 0))
+            except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+                _LOG.debug("Could not fetch channel trim for input %s: %s", input_id, err)
+
+            try:
+                gain_resp = await self.device.async_get_gain(input_id)
+                data["channel_gain"] = float(gain_resp.get("level", 0))
+            except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+                _LOG.debug("Could not fetch channel gain for input %s: %s", input_id, err)
+
+            try:
+                lipsync_resp = await self.device.async_get_lipsync(input_id)
+                data["lipsync_delay"] = float(lipsync_resp.get("delayMs", 0))
+            except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+                _LOG.debug("Could not fetch lipsync delay for input %s: %s", input_id, err)
 
             return data
         except (ClientError, TimeoutError, OSError, Exception) as err:
