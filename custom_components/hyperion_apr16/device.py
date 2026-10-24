@@ -175,10 +175,9 @@ class Apr16:
 
     async def set_volume(self, level: float) -> None:
         """Set master volume, converting HA percentage to Hyperion dB scale."""
-        # Convert incoming 0-100 percentage to the processor's dB scale
-        db_level = percent_to_db(float(level))
+        # Convert incoming percentage to dB and round to 1 decimal place
+        db_level = round(percent_to_db(float(level)), 1)
         
-        # Round or format as needed for the API endpoint path/payload
         await self._send_request(
             "POST", f"/v1/vol/{db_level}", {"level": db_level}
         )
