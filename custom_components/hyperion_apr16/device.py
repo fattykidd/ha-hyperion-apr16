@@ -93,7 +93,8 @@ class Apr16:
         # Parse responses safely
         power = False
         if isinstance(power_res, dict):
-            power = str(power_res.get("state", "")).lower() == "on"
+            val = power_res.get("state", False)
+            power = str(val).lower() in ("1", "true", "on")
 
         volume = 0.0
         if isinstance(vol_res, dict):
@@ -122,8 +123,8 @@ class Apr16:
 
         trigger_state = False
         if isinstance(trigger_res, dict):
-            val = trigger_res.get("state", trigger_res.get("value", trigger_res.get("level", False)))
-            trigger_state = str(val).lower() in ("1", "true", "on")
+            val = trigger_res.get("enabled", trigger_res.get("state", trigger_res.get("value", False)))
+            trigger_state = bool(val) if isinstance(val, bool) else str(val).lower() in ("1", "true", "on")
 
         audio_format = "PCM"
         if isinstance(audio_format_res, dict):
@@ -155,11 +156,11 @@ class Apr16:
 
     async def power_on(self) -> None:
         """Turn the processor power on."""
-        await self._send_request("POST", "/v1/power", {"state": "on"})
+        await self._send_request("POST", "/v1/power", {"state": "1"})
 
     async def power_off(self) -> None:
         """Turn the processor power off."""
-        await self._send_request("POST", "/v1/power", {"state": "off"})
+        await self._send_request("POST", "/v1/power", {"state": "0"})
 
     async def set_volume(self, level: float) -> None:
         """Set volume level (0-100)."""
@@ -179,7 +180,17 @@ class Apr16:
 
     async def reboot(self) -> None:
         """Reboot the processor."""
-        await self._send_request("POST", "/v1/reboot")
+        if self._session is None:
+            self._session = ClientSession()
+
+        url = f"{self._base_url}/v1/reboot"
+        try:
+            # Send with empty JSON body to match the working curl request
+            async with self._session.post(url, json={}, timeout=5):
+                pass
+        except (ClientError, TimeoutError, OSError) as err:
+            # Expected behavior because the device drops the connection instantly on reboot
+            _LOG.info("Reboot command sent; device restarted as expected: %s", err)
 
     async def trigger_hpd(self) -> None:
         """Trigger Hot Plug Detect (HPD) for EDID/display refresh."""
@@ -187,8 +198,7 @@ class Apr16:
 
     async def set_trigger(self, state: bool) -> None:
         """Enable or disable 12V trigger output."""
-        val = "on" if state else "off"
-        await self._send_request("POST", "/v1/trigger/output", {"state": val})
+        await self._send_request("POST", "/v1/trigger/output", {"enabled": bool(state)})
 
     async def get_input_bass(self, name: str) -> float:
         """Get bass level for a specific input source (-12 to +12 dB)."""
