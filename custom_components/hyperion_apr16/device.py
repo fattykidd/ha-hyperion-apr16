@@ -164,7 +164,7 @@ class Apr16:
 
     async def set_volume(self, level: float) -> None:
         """Set volume level (0-100)."""
-        await self._send_request("POST", "/v1/vol", {"level": level})
+        await self._send_request("POST", "/v1/vol", {"level": round(level)})
 
     async def set_mute(self, mute: bool) -> None:
         """Set mute state."""

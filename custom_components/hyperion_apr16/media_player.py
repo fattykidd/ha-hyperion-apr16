@@ -77,10 +77,10 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     @property
     def volume_level(self) -> float | None:
-        """Return the volume level (0.0 to 1.0 mapped from dB or raw)."""
+        """Return the volume level (0.0 to 1.0 mapped from 0-100 scale)."""
         vol = self.coordinator.data.get("volume", 0.0)
         try:
-            return max(0.0, min(1.0, (float(vol) + 80.0) / 80.0))
+            return max(0.0, min(1.0, float(vol) / 100.0))
         except (ValueError, TypeError):
             return 0.0
 
@@ -122,9 +122,9 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_set_volume_level(self, volume: float) -> None:
-        """Set volume level, range 0.0 to 1.0."""
-        db_val = -80.0 + (volume * 80.0)
-        await self._device.set_volume(db_val)
+        """Set volume level, range 0.0 to 1.0 mapped to 0-100."""
+        level = round(volume * 100)
+        await self._device.set_volume(level)
         await self.coordinator.async_request_refresh()
 
     async def async_mute_volume(self, mute: bool) -> None:
