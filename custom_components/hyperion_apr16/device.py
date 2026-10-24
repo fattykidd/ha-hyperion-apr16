@@ -173,7 +173,7 @@ class Apr16:
     async def set_active_input(self, source: str) -> None:
         """Set active input source."""
         await self._send_request("POST", "/api/atlas/input/active", {"input": source, "inputId": 0})
-
+        
     async def set_audio_mode(self, mode: str) -> None:
         """Set the audio processing mode."""
         await self._send_request("POST", "/v1/audiomode", {"mode": mode})

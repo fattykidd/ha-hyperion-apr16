@@ -97,7 +97,7 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     @property
     def source_list(self) -> list[str] | None:
         """List of available input sources."""
-        return ["HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "Optical", "Coaxial", "Analog"]
+        return ["HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "HDMI 5", "HDMI 6", "HDMI 7", "Digital 1", "Digital 2", "Digital 3", "Digital 4", "Analog 1", "Analog 2", "Analog 3", "Dante", "eARC"]
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
