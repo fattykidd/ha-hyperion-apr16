@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import math
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -119,38 +118,19 @@ class HyperionAbsoluteVolumeSensor(HyperionBaseSensor):
         return None
 
 
-class HyperionRelativeVolumeSensor(HyperionBaseSensor):
-    """Representation of Hyperion Relative Volume (dB calibrated to 14% = -61.5 dB)."""
-
-    _attr_native_unit_of_measurement = "dB"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:volume-high"
-
-    def __init__(self, coordinator: HyperionDataUpdateCoordinator, entry: ConfigEntry) -> None:
-        """Initialize relative volume sensor."""
-        super().__init__(coordinator, entry)
-        self._attr_unique_id = f"{entry.entry_id}_volume_relative"
-        self._attr_name = f"{entry.title} Volume Relative"
+class HyperionRelativeVolumeSensor(CoordinatorEntity, SensorEntity):
+    """Representation of the Relative Volume (dB) Sensor."""
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self):
         """Return the relative volume in dB."""
-        data = self.coordinator.data
-        if not data:
-            return None
-        val = data.get("volume")
-        if val is not None:
-            try:
-                percent = float(val)
-                if percent <= 0:
-                    return -80.0
-
-                # Logarithmic conversion calibrated such that 14% = -61.5 dB
-                db = 20 * math.log10(percent / 100.0) * 3.6
-                return round(max(db, -80.0), 1)
-            except (ValueError, TypeError):
-                pass
-        return None
+        # This grabs the dB value computed by percent_to_db() in the coordinator
+        return self.coordinator.data.get("volume_db")
+        
+    @property
+    def native_unit_of_measurement(self):
+        """Return the unit of measurement."""
+        return "dB"
 
 
 class HyperionSensor(HyperionBaseSensor):

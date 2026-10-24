@@ -8,6 +8,7 @@ from typing import Any
 from aiohttp import ClientError, ClientSession
 
 from .config import APR16Config
+from .helper import percent_to_db
 
 _LOG = logging.getLogger(__name__)
 
@@ -96,10 +97,15 @@ class Apr16:
             val = power_res.get("state", False)
             power = str(val).lower() in ("1", "true", "on")
 
-        volume = 0.0
+        volume_percent = 0.0
+        volume_db = -127.5
+        
         if isinstance(vol_res, dict):
-            # The API returns the volume directly as a 0-100 percentage
-            volume = float(vol_res.get("level", 0.0))
+            # 1. Absolute scale (0-100 percentage)
+            volume_percent = float(vol_res.get("level", 0.0))
+            
+            # 2. Relative scale (Mapped dB attenuation using our helper)
+            volume_db = round(percent_to_db(volume_percent), 1)
 
         mute = False
         if isinstance(mute_res, dict):
@@ -149,7 +155,8 @@ class Apr16:
 
         return {
             "power": power,
-            "volume": volume,
+            "volume": volume_percent,
+            "volume_db": volume_db,
             "mute": mute,
             "active_input": active_input,
             "input_id": input_id,

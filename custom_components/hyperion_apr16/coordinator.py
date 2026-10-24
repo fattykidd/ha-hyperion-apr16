@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
+from .helper import percent_to_db  # <--- 1. Import your volume helper
 
 _LOG = logging.getLogger(__name__)
 
@@ -36,6 +37,12 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Attach device property metadata
             data["host_ip"] = getattr(self.device, "host", None)
+
+            # 2. Calculate the relative dB value and add it to the coordinator data
+            # (Checks whichever key your device status uses for the 0-100 percentage)
+            vol_val = data.get("volume", data.get("level", 0.0))
+            if vol_val is not None:
+                data["volume_db"] = round(percent_to_db(float(vol_val)), 1)
 
             return data
         except (ClientError, TimeoutError, OSError, Exception) as err:
