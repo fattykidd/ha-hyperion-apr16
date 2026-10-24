@@ -106,7 +106,7 @@ class Apr16:
 
         active_input = "HDMI 1"
         if isinstance(input_res, dict):
-            active_input = input_res.get("name", "HDMI 1")
+            active_input = input_res.get("input", input_res.get("name", "HDMI 1"))
 
         audio_mode = "Auto"
         if isinstance(audio_mode_res, dict):
@@ -172,7 +172,7 @@ class Apr16:
 
     async def set_active_input(self, source: str) -> None:
         """Set active input source."""
-        await self._send_request("POST", "/api/atlas/input/active", {"name": source})
+        await self._send_request("POST", "/api/atlas/input/active", {"input": source, "inputId": 0})
 
     async def set_audio_mode(self, mode: str) -> None:
         """Set the audio processing mode."""
@@ -192,35 +192,48 @@ class Apr16:
             # Expected behavior because the device drops the connection instantly on reboot
             _LOG.info("Reboot command sent; device restarted as expected: %s", err)
 
-    async def trigger_hpd(self) -> None:
+    async def trigger_hpd(self, state: bool = True) -> None:
         """Trigger Hot Plug Detect (HPD) for EDID/display refresh."""
-        await self._send_request("POST", "/v1/hdmi/output/hpd")
+        await self._send_request("POST", "/v1/hdmi/output/hpd", {"state": bool(state)})
 
     async def set_trigger(self, state: bool) -> None:
         """Enable or disable 12V trigger output."""
         await self._send_request("POST", "/v1/trigger/output", {"enabled": bool(state)})
 
-    async def get_input_bass(self, name: str) -> float:
-        """Get bass level for a specific input source (-12 to +12 dB)."""
-        res = await self._send_request("GET", f"/api/atlas/input/{name}/bass/")
+    async def get_input_name(self, input_id: int) -> str:
+        """Get the friendly name for a specific input index."""
+        res = await self._send_request("GET", f"/api/atlas/input/name?input={input_id}")
         if isinstance(res, dict):
-            return float(res.get("bass", res.get("level", 0.0)))
+            return res.get(
+                "name", res.get("input", f"Input {input_id}")
+            )
+        return f"Input {input_id}"
+
+    async def get_input_bass(self, input_id: int | str) -> float:
+        """Get bass level for a specific input (-12 to +12 dB)."""
+        res = await self._send_request("GET", f"/api/atlas/input/{input_id}/bass")
+        if isinstance(res, dict):
+            return float(res.get("level", 0.0))
         return 0.0
 
-    async def set_input_bass(self, name: str, level: float) -> None:
-        """Set bass level for a specific input source."""
-        await self._send_request("POST", f"/api/atlas/input/{name}/bass/{level}")
+    async def set_input_bass(self, input_id: int | str, level: float) -> None:
+        """Set bass level for a specific input with required payload."""
+        await self._send_request(
+            "POST", f"/api/atlas/input/{input_id}/bass/{level}", {"inputId": 0}
+        )
 
-    async def get_input_treble(self, name: str) -> float:
-        """Get treble level for a specific input source (-12 to +12 dB)."""
-        res = await self._send_request("GET", f"/api/atlas/input/{name}/treb/")
+    async def get_input_treble(self, input_id: int | str) -> float:
+        """Get treble level for a specific input (-12 to +12 dB)."""
+        res = await self._send_request("GET", f"/api/atlas/input/{input_id}/treb")
         if isinstance(res, dict):
-            return float(res.get("treble", res.get("level", 0.0)))
+            return float(res.get("level", 0.0))
         return 0.0
 
-    async def set_input_treble(self, name: str, level: float) -> None:
-        """Set treble level for a specific input source."""
-        await self._send_request("POST", f"/api/atlas/input/{name}/treb/{level}")
+    async def set_input_treble(self, input_id: int | str, level: float) -> None:
+        """Set treble level for a specific input with required payload."""
+        await self._send_request(
+            "POST", f"/api/atlas/input/{input_id}/treb/{level}", {"inputId": 0}
+        )
 
     async def set_display_brightness(self, level: int) -> None:
         """Set front panel display brightness percentage."""
