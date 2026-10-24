@@ -105,8 +105,14 @@ class Apr16:
             mute = bool(mute_res.get("state", mute_res.get("mute", False)))
 
         active_input = "HDMI 1"
+        input_id = 1
         if isinstance(input_res, dict):
             active_input = input_res.get("input", input_res.get("name", "HDMI 1"))
+            input_id = input_res.get("inputId", 1)
+
+        # Fetch bass and treble using the extracted numeric input ID
+        bass_level = await self.get_input_bass(input_id)
+        treble_level = await self.get_input_treble(input_id)
 
         audio_mode = "Auto"
         if isinstance(audio_mode_res, dict):
@@ -145,6 +151,9 @@ class Apr16:
             "volume": volume,
             "mute": mute,
             "active_input": active_input,
+            "input_id": input_id,
+            "bass": bass_level,
+            "treble": treble_level,
             "audio_mode": audio_mode,
             "brightness": brightness,
             "trigger_state": trigger_state,
@@ -217,9 +226,10 @@ class Apr16:
         return 0.0
 
     async def set_input_bass(self, input_id: int | str, level: float) -> None:
-        """Set bass level for a specific input with required payload."""
+        """Set bass level for a specific input, ensuring integer values for path compatibility."""
+        int_level = round(level)
         await self._send_request(
-            "POST", f"/api/atlas/input/{input_id}/bass/{level}", {"inputId": 0}
+            "POST", f"/api/atlas/input/{input_id}/bass/{int_level}", {"inputId": 0}
         )
 
     async def get_input_treble(self, input_id: int | str) -> float:
@@ -230,9 +240,10 @@ class Apr16:
         return 0.0
 
     async def set_input_treble(self, input_id: int | str, level: float) -> None:
-        """Set treble level for a specific input with required payload."""
+        """Set treble level for a specific input, ensuring integer values for path compatibility."""
+        int_level = round(level)
         await self._send_request(
-            "POST", f"/api/atlas/input/{input_id}/treb/{level}", {"inputId": 0}
+            "POST", f"/api/atlas/input/{input_id}/treb/{int_level}", {"inputId": 0}
         )
 
     async def set_display_brightness(self, level: int) -> None:
