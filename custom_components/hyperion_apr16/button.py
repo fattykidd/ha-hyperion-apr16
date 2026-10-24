@@ -37,6 +37,8 @@ async def async_setup_entry(
         HyperionTrebleDownButton(coordinator, device, entry),
         HyperionBrightnessUpButton(coordinator, device, entry),
         HyperionBrightnessDownButton(coordinator, device, entry),
+        HyperionVolumeButton(coordinator, device, entry, "up"),
+        HyperionVolumeButton(coordinator, device, entry, "down"),
     ]
 
     async_add_entities(buttons)
@@ -200,3 +202,37 @@ class HyperionBrightnessDownButton(HyperionBaseButton):
             await self.coordinator.async_request_refresh()
         except (ClientError, OSError) as err:
             _LOG.error("Failed to decrease brightness: %s", err)
+
+class HyperionVolumeButton(CoordinatorEntity, ButtonEntity):
+    """Representation of a Volume Up or Down button."""
+
+    def __init__(self, coordinator, device, entry, direction: str) -> None:
+        """Initialize the volume button."""
+        super().__init__(coordinator)
+        self._device = device
+        self._direction = direction  # "up" or "down"
+        self._attr_unique_id = f"{entry.entry_id}_volume_{direction}"
+        self._attr_name = f"{entry.title} Volume {'Up' if direction == 'up' else 'Down'}"
+        self._attr_icon = "mdi:volume-plus" if direction == "up" else "mdi:volume-minus"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": entry.title,
+            "manufacturer": "AudioControl",
+            "model": "Hyperion APR-16",
+        }
+
+    async def async_press(self) -> None:
+        """Handle the button press to adjust volume by 1%."""
+        try:
+            # Get current volume from coordinator data (0-100 scale)
+            current_vol = float(self.coordinator.data.get("volume", 0.0))
+            
+            if self._direction == "up":
+                new_vol = min(100.0, current_vol + 1.0)
+            else:
+                new_vol = max(0.0, current_vol - 1.0)
+
+            await self._device.set_volume(new_vol)
+            await self.coordinator.async_request_refresh()
+        except (ClientError, OSError) as err:
+            _LOG.error("Failed to adjust volume %s: %s", self._direction, err)   
