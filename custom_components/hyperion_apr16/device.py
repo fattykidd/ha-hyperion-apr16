@@ -8,6 +8,7 @@ from typing import Any
 from aiohttp import ClientError, ClientSession
 
 from .config import APR16Config
+from .helper import db_to_percent, percent_to_db
 
 _LOG = logging.getLogger(__name__)
 
@@ -98,7 +99,8 @@ class Apr16:
 
         volume = 0.0
         if isinstance(vol_res, dict):
-            volume = float(vol_res.get("level", 0.0))
+            raw_db = float(vol_res.get("level", -127.5))
+            volume = db_to_percent(raw_db)
 
         mute = False
         if isinstance(mute_res, dict):
@@ -172,8 +174,14 @@ class Apr16:
         await self._send_request("POST", "/v1/power", {"state": "0"})
 
     async def set_volume(self, level: float) -> None:
-        """Set volume level (0-100)."""
-        await self._send_request("POST", "/v1/vol", {"level": round(level)})
+        """Set master volume, converting HA percentage to Hyperion dB scale."""
+        # Convert incoming 0-100 percentage to the processor's dB scale
+        db_level = percent_to_db(float(level))
+        
+        # Round or format as needed for the API endpoint path/payload
+        await self._send_request(
+            "POST", f"/v1/vol/{db_level}", {"level": db_level}
+        )
 
     async def set_mute(self, mute: bool) -> None:
         """Set mute state."""

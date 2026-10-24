@@ -131,7 +131,7 @@ class HyperionToneButton(CoordinatorEntity, ButtonEntity):
             input_id = self.coordinator.data.get("input_id", 1)
             
             # 2. Calculate new level (clamped between -12 and 12 dB)
-            new_level = int(round(max(-12.0, min(12.0, current_val + self._step))))
+            new_level = round(max(-12.0, min(12.0, current_val + self._step)))
 
             # 3. Send command to device
             if self._tone_type == "bass":
