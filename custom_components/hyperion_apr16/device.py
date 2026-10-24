@@ -235,6 +235,13 @@ class Apr16:
             "POST", f"/api/atlas/input/{input_id}/treb/{level}", {"inputId": 0}
         )
 
-    async def set_display_brightness(self, level: int) -> None:
-        """Set front panel display brightness percentage."""
-        await self._send_request("POST", "/v1/displaybrightness", {"brightness": level})
+    async def get_brightness(self) -> int:
+        """Get panel brightness (0-100)."""
+        res = await self._send_request("GET", "/v1/brightness")
+        if isinstance(res, dict):
+            return int(res.get("brightness", res.get("level", 100)))
+        return 100
+
+    async def set_brightness(self, level: float) -> None:
+        """Set panel brightness (0-100)."""
+        await self._send_request("POST", "/v1/brightness", {"brightness": round(level)})
