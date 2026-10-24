@@ -31,12 +31,12 @@ async def async_setup_entry(
     buttons = [
         HyperionRebootButton(coordinator, device, entry),
         HyperionHpdButton(coordinator, device, entry),
-        HyperionBassUpButton(coordinator, device, entry),
-        HyperionBassDownButton(coordinator, device, entry),
-        HyperionTrebleUpButton(coordinator, device, entry),
-        HyperionTrebleDownButton(coordinator, device, entry),
-        HyperionBrightnessUpButton(coordinator, device, entry),
-        HyperionBrightnessDownButton(coordinator, device, entry),
+        HyperionToneButton(coordinator, device, entry, "bass", "up"),
+        HyperionToneButton(coordinator, device, entry, "bass", "down"),
+        HyperionToneButton(coordinator, device, entry, "treble", "up"),
+        HyperionToneButton(coordinator, device, entry, "treble", "down"),
+        HyperionBrightnessButton(coordinator, device, entry, "up"),
+        HyperionBrightnessButton(coordinator, device, entry, "down"),
         HyperionVolumeButton(coordinator, device, entry, "up"),
         HyperionVolumeButton(coordinator, device, entry, "down"),
     ]
@@ -100,108 +100,95 @@ class HyperionHpdButton(HyperionBaseButton):
             _LOG.error("Failed to trigger HPD on Hyperion APR-16: %s", err)
 
 
-class HyperionBassUpButton(HyperionBaseButton):
-    """Button to increase input bass by 1dB."""
+class HyperionToneButton(CoordinatorEntity, ButtonEntity):
+    """Representation of a Bass or Treble adjustment button (+ / -)."""
 
-    def __init__(self, coordinator, device, entry):
-        super().__init__(coordinator, device, entry, "bass_up", "Bass +1dB")
-
-    async def async_press(self) -> None:
-        """Handle the button press."""
-        try:
-            active_input = self.coordinator.data.get("active_input", "HDMI 1")
-            current = await self._device.get_input_bass(active_input)
-            await self._device.set_input_bass(active_input, current + 1.0)
-            await self.coordinator.async_request_refresh()
-        except (ClientError, OSError) as err:
-            _LOG.error("Failed to increase bass: %s", err)
-
-
-class HyperionBassDownButton(HyperionBaseButton):
-    """Button to decrease input bass by 1dB."""
-
-    def __init__(self, coordinator, device, entry):
-        super().__init__(coordinator, device, entry, "bass_down", "Bass -1dB")
-
-    async def async_press(self) -> None:
-        """Handle the button press."""
-        try:
-            active_input = self.coordinator.data.get("active_input", "HDMI 1")
-            current = await self._device.get_input_bass(active_input)
-            await self._device.set_input_bass(active_input, current - 1.0)
-            await self.coordinator.async_request_refresh()
-        except (ClientError, OSError) as err:
-            _LOG.error("Failed to decrease bass: %s", err)
-
-
-class HyperionTrebleUpButton(HyperionBaseButton):
-    """Button to increase input treble by 1dB."""
-
-    def __init__(self, coordinator, device, entry):
-        super().__init__(coordinator, device, entry, "treble_up", "Treble +1dB")
+    def __init__(self, coordinator, device, entry, tone_type: str, direction: str) -> None:
+        """Initialize the tone button ('bass' or 'treble', 'up' or 'down')."""
+        super().__init__(coordinator)
+        self._device = device
+        self._tone_type = tone_type  # "bass" or "treble"
+        self._direction = direction  # "up" or "down"
+        
+        step = 1.0
+        self._step = step if direction == "up" else -step
+        
+        self._attr_unique_id = f"{entry.entry_id}_{tone_type}_{direction}"
+        self._attr_name = f"{entry.title} {tone_type.capitalize()} {'Up' if direction == 'up' else 'Down'}"
+        self._attr_icon = "mdi:equalizer"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": entry.title,
+            "manufacturer": "AudioControl",
+            "model": "Hyperion APR-16",
+        }
 
     async def async_press(self) -> None:
-        """Handle the button press."""
+        """Handle the button press to adjust tone optimistically."""
         try:
-            active_input = self.coordinator.data.get("active_input", "HDMI 1")
-            current = await self._device.get_input_treble(active_input)
-            await self._device.set_input_treble(active_input, current + 1.0)
-            await self.coordinator.async_request_refresh()
+            # 1. Get current level and active input ID from coordinator data
+            current_val = float(self.coordinator.data.get(self._tone_type, 0.0))
+            input_id = self.coordinator.data.get("input_id", 1)
+            
+            # 2. Calculate new level (clamped between -12 and 12 dB)
+            new_level = int(round(max(-12.0, min(12.0, current_val + self._step))))
+
+            # 3. Send command to device
+            if self._tone_type == "bass":
+                await self._device.set_input_bass(input_id, new_level)
+            else:
+                await self._device.set_input_treble(input_id, new_level)
+
+            # 4. Optimistically update local coordinator data for instant UI response
+            if self.coordinator.data:
+                self.coordinator.data[self._tone_type] = float(new_level)
+                self.coordinator.async_update_listeners()
+
         except (ClientError, OSError) as err:
-            _LOG.error("Failed to increase treble: %s", err)
+            _LOG.error("Failed to adjust %s %s: %s", self._tone_type, self._direction, err)
 
 
-class HyperionTrebleDownButton(HyperionBaseButton):
-    """Button to decrease input treble by 1dB."""
+class HyperionBrightnessButton(CoordinatorEntity, ButtonEntity):
+    """Representation of a Panel Brightness Up or Down button."""
 
-    def __init__(self, coordinator, device, entry):
-        super().__init__(coordinator, device, entry, "treble_down", "Treble -1dB")
+    def __init__(self, coordinator, device, entry, direction: str) -> None:
+        """Initialize the brightness button."""
+        super().__init__(coordinator)
+        self._device = device
+        self._direction = direction  # "up" or "down"
+        self._step = 10  # 10% adjustment per press
+        
+        self._attr_unique_id = f"{entry.entry_id}_brightness_{direction}"
+        self._attr_name = f"{entry.title} Brightness {'Up' if direction == 'up' else 'Down'}"
+        self._attr_icon = "mdi:brightness-increase" if direction == "up" else "mdi:brightness-decrease"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": entry.title,
+            "manufacturer": "AudioControl",
+            "model": "Hyperion APR-16",
+        }
 
     async def async_press(self) -> None:
-        """Handle the button press."""
+        """Handle the button press to adjust panel brightness optimistically."""
         try:
-            active_input = self.coordinator.data.get("active_input", "HDMI 1")
-            current = await self._device.get_input_treble(active_input)
-            await self._device.set_input_treble(active_input, current - 1.0)
-            await self.coordinator.async_request_refresh()
+            # Get current brightness from coordinator data (0-100 scale)
+            current_brightness = int(self.coordinator.data.get("brightness", 50))
+            
+            if self._direction == "up":
+                new_brightness = min(100, current_brightness + self._step)
+            else:
+                new_brightness = max(0, current_brightness - self._step)
+
+            # 1. Send command to the device
+            await self._device.set_brightness(new_brightness)
+
+            # 2. Optimistically update local coordinator data so slider & UI sync instantly
+            if self.coordinator.data:
+                self.coordinator.data["brightness"] = new_brightness
+                self.coordinator.async_update_listeners()
+
         except (ClientError, OSError) as err:
-            _LOG.error("Failed to decrease treble: %s", err)
-
-
-class HyperionBrightnessUpButton(HyperionBaseButton):
-    """Button to increase display brightness by 10%."""
-
-    def __init__(self, coordinator, device, entry):
-        super().__init__(coordinator, device, entry, "brightness_up", "Brightness +10%")
-
-    async def async_press(self) -> None:
-        """Handle the button press."""
-        try:
-            current = self.coordinator.data.get("brightness", 50)
-            new_val = min(100, current + 10)
-            await self._device.set_display_brightness(new_val)
-            await self.coordinator.async_request_refresh()
-        except (ClientError, OSError) as err:
-            _LOG.error("Failed to increase brightness: %s", err)
-
-
-class HyperionBrightnessDownButton(HyperionBaseButton):
-    """Button to decrease display brightness by 10%."""
-
-    def __init__(self, coordinator, device, entry):
-        super().__init__(
-            coordinator, device, entry, "brightness_down", "Brightness -10%"
-        )
-
-    async def async_press(self) -> None:
-        """Handle the data and button press."""
-        try:
-            current = self.coordinator.data.get("brightness", 50)
-            new_val = max(0, current - 10)
-            await self._device.set_display_brightness(new_val)
-            await self.coordinator.async_request_refresh()
-        except (ClientError, OSError) as err:
-            _LOG.error("Failed to decrease brightness: %s", err)
+            _LOG.error("Failed to adjust brightness %s: %s", self._direction, err)
 
 class HyperionVolumeButton(CoordinatorEntity, ButtonEntity):
     """Representation of a Volume Up or Down button."""
