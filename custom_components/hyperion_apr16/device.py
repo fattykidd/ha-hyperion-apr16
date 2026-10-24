@@ -8,7 +8,7 @@ from typing import Any
 from aiohttp import ClientError, ClientSession
 
 from .config import APR16Config
-from .helper import db_to_percent, percent_to_db
+from .helper import db_to_percent
 
 _LOG = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ class Apr16:
         """Turn the processor power off."""
         await self._send_request("POST", "/v1/power", {"state": "0"})
 
-    async def set_volume(self, level: float | int) -> None:
+    async def set_volume(self, level: float) -> None:
         """Set volume level (0-100)."""
         await self._send_request("POST", "/v1/vol", {"level": round(level)})
 
