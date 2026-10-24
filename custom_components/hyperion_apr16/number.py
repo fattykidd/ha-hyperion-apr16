@@ -122,10 +122,27 @@ class HyperionAudioConfigNumber(CoordinatorEntity, NumberEntity):
         return float(data.get(self._key, 0.0))
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set new value."""
+        """Set new value using input_id and explicit device methods."""
         try:
-            # Assumes your device client accepts a dictionary update for audio config
-            await self._device.set_audio_config({self._key: value})
+            input_id = self.coordinator.data.get("input_id", 1)
+            val = float(value)
+
+            if self._key == "bass":
+                await self._device.set_input_bass(input_id, val)
+            elif self._key == "treble":
+                await self._device.set_input_treble(input_id, val)
+            elif self._key == "channel_trim":
+                await self._device.set_input_channel_trim(input_id, val) # Calls /trim/{val}
+            elif self._key == "channel_gain":
+                await self._device.set_input_channel_gain(input_id, val) # Calls /gain/{val}
+            elif self._key == "lipsync_delay":
+                await self._device.set_input_lipsync_delay(input_id, int(val))
+
+            # Optimistically update coordinator data for instant UI response
+            if self.coordinator.data:
+                self.coordinator.data[self._key] = val
+                self.coordinator.async_update_listeners()
+
             await self.coordinator.async_request_refresh()
         except (ClientError, OSError) as err:
             _LOG.error("Failed to set %s: %s", self._key, err)

@@ -268,3 +268,22 @@ class Apr16:
     async def set_brightness(self, level: float) -> None:
         """Set panel brightness (0-100)."""
         await self._send_request("POST", "/v1/displaybrightness", {"brightness": round(level)})
+
+    async def set_input_lipsync_delay(self, input_id: int, delay_ms: int) -> None:
+        """Set lipsync delay for a specific input via Atlas API."""
+        url = f"{self._base_url}/api/atlas/input/{input_id}/lipsync/{int(delay_ms)}"
+        async with self._session.post(url, json={"inputId": 0}) as response:
+            response.raise_for_status()
+
+    async def set_input_channel_gain(self, input_id: int, gain_db: float) -> None:
+        """Set input gain/trim for a specific input via Atlas API."""
+        # Ensure gain value formatting matches your API expectations
+        url = f"{self._base_url}/api/atlas/input/{input_id}/gain/{gain_db}"
+        async with self._session.post(url, json={"inputId": 0}) as response:
+            response.raise_for_status()
+
+    async def set_input_channel_trim(self, input_id: int, trim_val: float) -> None:
+        """Set input channel trim for a specific input via Atlas API."""
+        url = f"{self._base_url}/api/atlas/input/{input_id}/trim/{trim_val}"
+        async with self._session.post(url, json={"inputId": 0}) as response:
+            response.raise_for_status()
