@@ -232,7 +232,13 @@ class HyperionVolumeButton(CoordinatorEntity, ButtonEntity):
             else:
                 new_vol = max(0.0, current_vol - 1.0)
 
+            # 1. Send the command to the device immediately
             await self._device.set_volume(new_vol)
-            await self.coordinator.async_request_refresh()
+
+            # 2. Optimistically update local coordinator data so UI responds instantly
+            if self.coordinator.data:
+                self.coordinator.data["volume"] = new_vol
+                self.coordinator.async_update_listeners()
+
         except (ClientError, OSError) as err:
-            _LOG.error("Failed to adjust volume %s: %s", self._direction, err)   
+            _LOG.error("Failed to adjust volume %s: %s", self._direction, err)
