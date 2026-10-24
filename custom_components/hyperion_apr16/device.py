@@ -237,4 +237,4 @@ class Apr16:
 
     async def set_display_brightness(self, level: int) -> None:
         """Set front panel display brightness percentage."""
-        await self._send_request("POST", "/v1/displaybrightness", {"level": level})
+        await self._send_request("POST", "/v1/displaybrightness", {"brightness": level})
