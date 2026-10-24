@@ -118,19 +118,32 @@ class HyperionAbsoluteVolumeSensor(HyperionBaseSensor):
         return None
 
 
-class HyperionRelativeVolumeSensor(CoordinatorEntity, SensorEntity):
-    """Representation of the Relative Volume (dB) Sensor."""
+class HyperionRelativeVolumeSensor(HyperionBaseSensor):
+    """Representation of Hyperion Relative Volume (dB)."""
+
+    _attr_native_unit_of_measurement = "dB"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:volume-medium"
+
+    def __init__(self, coordinator: HyperionDataUpdateCoordinator, entry: ConfigEntry) -> None:
+        """Initialize relative volume sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_volume_relative"
+        self._attr_name = f"{entry.title} Volume Relative"
 
     @property
-    def native_value(self):
+    def native_value(self) -> float | None:
         """Return the relative volume in dB."""
-        # This grabs the dB value computed by percent_to_db() in the coordinator
-        return self.coordinator.data.get("volume_db")
-        
-    @property
-    def native_unit_of_measurement(self):
-        """Return the unit of measurement."""
-        return "dB"
+        data = self.coordinator.data
+        if not data:
+            return None
+        val = data.get("volume_db")
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                pass
+        return None
 
 
 class HyperionSensor(HyperionBaseSensor):
