@@ -32,7 +32,8 @@ async def async_setup_entry(
 
     sensors = [
         HyperionPowerSensor(coordinator, entry),
-        HyperionVolumeSensor(coordinator, entry),
+        HyperionAbsoluteVolumeSensor(coordinator, entry),
+        HyperionRelativeVolumeSensor(coordinator, entry),
         HyperionSensor(coordinator, entry, "audio_format", "Audio Format", None),
         HyperionSensor(coordinator, entry, "video_detail", "Video Signal", None),
         HyperionSensor(coordinator, entry, "mute", "Mute State", None),
@@ -89,7 +90,7 @@ class HyperionPowerSensor(HyperionBaseSensor):
         return "On" if power else "Off"
 
 
-class HyperionVolumeSensor(HyperionBaseSensor):
+class HyperionAbsoluteVolumeSensor(HyperionBaseSensor):
     """Representation of Hyperion Absolute Volume (Percentage)."""
 
     _attr_native_unit_of_measurement = PERCENTAGE
@@ -116,15 +117,33 @@ class HyperionVolumeSensor(HyperionBaseSensor):
                 pass
         return None
 
+
+class HyperionRelativeVolumeSensor(HyperionBaseSensor):
+    """Representation of Hyperion Relative Volume (dB)."""
+
+    _attr_native_unit_of_measurement = "dB"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:volume-medium"
+
+    def __init__(self, coordinator: HyperionDataUpdateCoordinator, entry: ConfigEntry) -> None:
+        """Initialize relative volume sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_volume_relative"
+        self._attr_name = f"{entry.title} Volume Relative"
+
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the relative dB value as an attribute."""
+    def native_value(self) -> float | None:
+        """Return the relative volume in dB."""
         data = self.coordinator.data
         if not data:
-            return {}
-        return {
-            "volume_db": data.get("volume_db"),
-        }
+            return None
+        val = data.get("volume_db")
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                pass
+        return None
 
 
 class HyperionSensor(HyperionBaseSensor):
