@@ -8,7 +8,6 @@ from typing import Any
 from aiohttp import ClientError, ClientSession
 
 from .config import APR16Config
-from .helper import db_to_percent
 
 _LOG = logging.getLogger(__name__)
 
@@ -99,8 +98,8 @@ class Apr16:
 
         volume = 0.0
         if isinstance(vol_res, dict):
-            raw_db = float(vol_res.get("level", -127.5))
-            volume = db_to_percent(raw_db)
+            # The API returns the volume directly as a 0-100 percentage
+            volume = float(vol_res.get("level", 0.0))
 
         mute = False
         if isinstance(mute_res, dict):
