@@ -33,7 +33,8 @@ async def async_setup_entry(
             HyperionBrightnessNumber(coordinator, device, entry),
             HyperionAudioConfigNumber(coordinator, device, entry, "Bass", "bass", -12.0, 12.0, 0.5, "dB", "mdi:equalizer"),
             HyperionAudioConfigNumber(coordinator, device, entry, "Treble", "treble", -12.0, 12.0, 0.5, "dB", "mdi:equalizer"),
-            HyperionAudioConfigNumber(coordinator, device, entry, "Channel Trim", "channel_trim", -12.0, 12.0, 0.5, "dB", "mdi:speaker"),
+            HyperionAudioConfigNumber(coordinator, device, entry, "Channel Trim", "channel_trim", -12.0, 12.0, 1.0, "dB", "mdi:speaker"),
+            HyperionAudioConfigNumber(coordinator, device, entry, "Channel Gain", "channel_gain", -12.0, 12.0, 1.0, "dB", "mdi:equalizer"),
             HyperionAudioConfigNumber(coordinator, device, entry, "Lipsync Delay", "lipsync_delay", 0.0, 250.0, 5.0, "ms", "mdi:timer-sand"),
         ]
     )
@@ -132,9 +133,9 @@ class HyperionAudioConfigNumber(CoordinatorEntity, NumberEntity):
             elif self._key == "treble":
                 await self._device.set_input_treble(input_id, val)
             elif self._key == "channel_trim":
-                await self._device.set_input_channel_trim(input_id, val) # Calls /trim/{val}
+                await self._device.set_input_channel_trim(input_id, int(val))
             elif self._key == "channel_gain":
-                await self._device.set_input_channel_gain(input_id, val) # Calls /gain/{val}
+                await self._device.set_input_channel_gain(input_id, int(val))
             elif self._key == "lipsync_delay":
                 await self._device.set_input_lipsync_delay(input_id, int(val))
 

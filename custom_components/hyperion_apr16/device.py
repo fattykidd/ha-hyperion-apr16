@@ -278,12 +278,12 @@ class Apr16:
     async def set_input_channel_gain(self, input_id: int, gain_db: float) -> None:
         """Set input gain/trim for a specific input via Atlas API."""
         # Ensure gain value formatting matches your API expectations
-        url = f"{self._base_url}/api/atlas/input/{input_id}/gain/{gain_db}"
+        url = f"{self._base_url}/api/atlas/input/{input_id}/gain/{int(gain_db)}"
         async with self._session.post(url, json={"inputId": 0}) as response:
             response.raise_for_status()
 
     async def set_input_channel_trim(self, input_id: int, trim_val: float) -> None:
         """Set input channel trim for a specific input via Atlas API."""
-        url = f"{self._base_url}/api/atlas/input/{input_id}/trim/{trim_val}"
+        url = f"{self._base_url}/api/atlas/input/{input_id}/trim/{int(trim_val)}"
         async with self._session.post(url, json={"inputId": 0}) as response:
             response.raise_for_status()
