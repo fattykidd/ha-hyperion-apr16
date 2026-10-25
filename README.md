@@ -33,9 +33,11 @@ Input your Apr-16 IP-address with port and after about 10-15 seconds sensors sho
 
 **Manual:** Delete the old `hyperion_apr16` directory from `custom components`, copy the new `hyperion_apr16` folder from the updated .zip file into `custom_components`, and restart Home Assistant.
 
-## Screenshots In Action
+## What You're Getting
 
-![Screenshot 2](assets/pic.png)
+![Screenshot 2](assets/pic1.png) ![Screenshot 3](assets/pic2.png)
+![Screenshot 4](assets/pic3.png) ![Screenshot 5](assets/pic4.png)
+![Screenshot 6](assets/pic5.png)
 
 ## Acknowledgements and Attributions 
 
