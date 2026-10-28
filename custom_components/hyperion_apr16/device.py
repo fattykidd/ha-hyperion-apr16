@@ -322,5 +322,5 @@ class Apr16:
         async with self._session.get(url, headers={"Content-Type": "application/json"}) as resp:
             resp.raise_for_status()
             data = await resp.json()
-            return data.get("mac", "00:00:00:00:00:00")
+            return data.get("mac") or "00:00:00:00:00:00"
         

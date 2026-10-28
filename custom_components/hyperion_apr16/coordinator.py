@@ -78,7 +78,7 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 mac_resp = await self.device.async_get_macaddress()
                 data["mac_address"] = mac_resp
             except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
-                _LOG.debug("Could not fetch MAC address: %s", err)
+                _LOG.warning("Could not fetch MAC address (Error: %s - %s)", type(err).__name__, err)
                 data["mac_address"] = "00:00:00:00:00:00"
                 
             return data
