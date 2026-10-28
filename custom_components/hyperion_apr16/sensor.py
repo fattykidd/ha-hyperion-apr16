@@ -101,7 +101,7 @@ class HyperionAbsoluteVolumeSensor(HyperionBaseSensor):
         """Initialize absolute volume sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_volume_absolute"
-        self._attr_name = f"{entry.title} Volume Absolute"
+        self._attr_name = f"{entry.title} Absolute Volume"
 
     @property
     def native_value(self) -> float | None:
@@ -129,7 +129,7 @@ class HyperionRelativeVolumeSensor(HyperionBaseSensor):
         """Initialize relative volume sensor."""
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_volume_relative"
-        self._attr_name = f"{entry.title} Volume Relative"
+        self._attr_name = f"{entry.title} Relative Volume"
 
     @property
     def native_value(self) -> float | None:

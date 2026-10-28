@@ -315,3 +315,12 @@ class Apr16:
         async with self._session.get(url, headers={"Content-Type": "application/json"}) as resp:
             resp.raise_for_status()
             return await resp.json()
+
+    async def async_get_macaddress(self) -> str:
+        """Fetch MAC address from the device."""
+        url = f"http://{self._base_url}/v1/mac"
+        async with self._session.get(url, headers={"Content-Type": "application/json"}) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+            return data.get("mac", "00:00:00:00:00:00")
+        
