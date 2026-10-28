@@ -34,9 +34,9 @@ async def async_setup_entry(
         HyperionPowerSensor(coordinator, entry),
         HyperionAbsoluteVolumeSensor(coordinator, entry),
         HyperionRelativeVolumeSensor(coordinator, entry),
+        HyperionMuteSensor(coordinator, entry),
         HyperionSensor(coordinator, entry, "audio_format", "Audio Format", None),
         HyperionSensor(coordinator, entry, "video_detail", "Video Signal", None),
-        HyperionSensor(coordinator, entry, "mute", "Mute State", None),
         HyperionSensor(coordinator, entry, "brightness", "Display Brightness", "%"),
         HyperionSensor(coordinator, entry, "temperature", "Temperature", "°C", SensorDeviceClass.TEMPERATURE),
         HyperionSensor(coordinator, entry, "host_ip", "Host IP", None),
@@ -145,6 +145,25 @@ class HyperionRelativeVolumeSensor(HyperionBaseSensor):
                 pass
         return None
 
+class HyperionMuteSensor(HyperionBaseSensor):
+    """Representation of Hyperion Mute State."""
+
+    _attr_icon = "mdi:volume-mute"
+
+    def __init__(self, coordinator: HyperionDataUpdateCoordinator, entry: ConfigEntry) -> None:
+        """Initialize mute sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_mute"
+        self._attr_name = f"{entry.title} Mute State"
+
+    @property
+    def native_value(self) -> str:
+        """Return the friendly mute state."""
+        data = self.coordinator.data
+        if not data:
+            return "Off"
+        muted = data.get("mute", False)
+        return "Muted" if muted else "Off"
 
 class HyperionSensor(HyperionBaseSensor):
     """Representation of a standard Hyperion APR-16 sensor."""

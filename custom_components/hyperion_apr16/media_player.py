@@ -103,7 +103,6 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return device-specific attributes for audio/video status and temp."""
         data = self.coordinator.data or {}
-        is_muted = bool(self.is_volume_muted)
         
         return {
             "audio_format": data.get("audio_format"),
@@ -119,7 +118,6 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             "uptime": data.get("uptime", "Running"),
             "volume_db": data.get("volume_db"),
             "channel_layout": data.get("channel_layout", "7.3.6"),
-            "mute_status": "Muted" if is_muted else "Off",
         }
 
     async def async_turn_on(self) -> None:
