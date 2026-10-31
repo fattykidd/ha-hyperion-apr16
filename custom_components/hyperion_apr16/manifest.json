@@ -4,9 +4,9 @@
   "codeowners": ["@fattykidd"],
   "config_flow": true,
   "documentation": "https://github.com/fattykidd/ha-hyperion-apr16",
-  "issue_tracker": "https://github.com/fattykidd/ha-hyperion-apr16/issues",
   "integration_type": "device",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/fattykidd/ha-hyperion-apr16/issues",
   "requirements": [],
   "version": "0.2.5"
 }
