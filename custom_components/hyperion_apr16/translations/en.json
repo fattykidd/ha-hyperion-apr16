@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "AudioControl Hyperion APR-16",
+        "description": "Enter the network information to connect to your AudioControl Hyperion APR-16 processor.",
+        "data": {
+          "host": "IP Address or Hostname",
+          "name": "Name"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device. Please check the IP address and ensure the processor is powered on.",
+      "invalid_auth": "Invalid authentication credentials.",
+      "unknown": "An unexpected error occurred while connecting."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "host": "IP Address or Hostname"
+        }
+      }
+    }
+  }
+}
