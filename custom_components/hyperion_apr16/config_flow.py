@@ -50,15 +50,20 @@ class HyperionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             try:
                 await device.async_connect()
+                mac = await device.async_get_macaddress()
             except (TimeoutError, aiohttp.ClientError, OSError):
                 errors["base"] = "cannot_connect"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                # If connection succeeds, create the config entry
+                # Set the unique ID using the device's MAC address
+                await self.async_set_unique_id(mac)
+                self._abort_if_unique_id_configured()
+
+                # If connection succeeds and ID is unique, create the config entry
                 return self.async_create_entry(
-                    title=user_input.get("name", "AudioControl APR-16"),
+                    title=user_input.get(CONF_NAME, "Hyperion APR-16"),
                     data=user_input,
                 )
 
