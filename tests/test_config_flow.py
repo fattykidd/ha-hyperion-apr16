@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import aiohttp
 from homeassistant import config_entries
 from homeassistant.const import CONF_ADDRESS, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
@@ -58,7 +59,7 @@ async def test_form_cannot_connect(hass: HomeAssistant) -> None:
 
     with patch(
         "custom_components.hyperion_apr16.device.Apr16.async_connect",
-        return_value=False,
+        side_effect=aiohttp.ClientError("Connection failed"),
     ):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -69,5 +70,5 @@ async def test_form_cannot_connect(hass: HomeAssistant) -> None:
             },
         )
 
-        assert result2["type"] == FlowResultType.FORM
-        assert result2["errors"] == {"base": "cannot_connect"}
+    assert result2["type"] == FlowResultType.FORM
+    assert result2["errors"] == {"base": "cannot_connect"}

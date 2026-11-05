@@ -35,10 +35,7 @@ class Apr16:
         self._base_url = f"http://{self.host}:{self.port}"
 
     async def _send_request(self, method: str, endpoint: str, data: dict[str, Any] | None = None) -> Any:
-        """Send an HTTP request to the APR-16 API."""
-        if self._session is None:
-            self._session = ClientSession()
-
+        """Send an HTTP request to the APR-16 API using the shared session."""
         url = f"{self._base_url}{endpoint}"
         try:
             async with self._session.request(method, url, json=data, timeout=10) as response:
@@ -197,18 +194,13 @@ class Apr16:
 
     async def reboot(self) -> None:
         """Reboot the processor."""
-        if self._session is None:
-            self._session = ClientSession()
-
         url = f"{self._base_url}/v1/reboot"
         try:
-            # Send with empty JSON body to match the working curl request
             async with self._session.post(url, json={}, timeout=5):
                 pass
         except (ClientError, TimeoutError, OSError) as err:
-            # Expected behavior because the device drops the connection instantly on reboot
             _LOG.info("Reboot command sent; device restarted as expected: %s", err)
-
+            
     async def trigger_hpd(self, state: bool = True) -> None:
         """Trigger Hot Plug Detect (HPD) for EDID/display refresh."""
         await self._send_request("POST", "/v1/hdmi/output/hpd", {"state": bool(state)})

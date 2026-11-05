@@ -7,11 +7,12 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .config import APR16Config
 from .const import DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
-from .device import Apr16  # Import Apr16 directly
+from .device import Apr16
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,21 +40,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         port=port,
     )
 
-    device = Apr16(device_config=device_config)
+    # Get Home Assistant's shared aiohttp client session
+    session = async_get_clientsession(hass)
+    
+    # Initialize the device client with the shared session
+    device = Apr16(device_config=device_config, session=session)
 
-    # Initialize the coordinator...
-    coordinator = HyperionDataUpdateCoordinator(hass, device)
-
-    # Perform initial refresh to make sure device is online
+    # Initialize the data update coordinator
+    coordinator = HyperionDataUpdateCoordinator(hass, device=device)
     await coordinator.async_config_entry_first_refresh()
 
+    # Store device and coordinator dictionary in hass.data as expected by platforms
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "device": device,
         "coordinator": coordinator,
     }
 
-    # Forward setup to platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True

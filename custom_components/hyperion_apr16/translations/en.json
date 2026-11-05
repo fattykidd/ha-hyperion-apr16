@@ -5,7 +5,8 @@
         "title": "AudioControl Hyperion APR-16",
         "description": "Enter the network information to connect to your AudioControl Hyperion APR-16 processor.",
         "data": {
-          "host": "IP Address or Hostname",
+          "address": "IP Address or Hostname",
+          "port": "Port",
           "name": "Name"
         }
       }
@@ -23,7 +24,8 @@
     "step": {
       "init": {
         "data": {
-          "host": "IP Address or Hostname"
+          "address": "IP Address or Hostname",
+          "port": "Port"
         }
       }
     }
