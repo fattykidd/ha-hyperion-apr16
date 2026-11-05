@@ -10,9 +10,17 @@ Assistant](https://www.home-assistant.io/) integration for the [Hyperion Apr-16]
 
 ## Installation
 
-### HACS (recommended)
+### Market Place (recommended easybutton)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fattykidd&repository=ha-hyperion-apr16&category=integration)
+
+1. Search Marketplace for "Hyperion" or "AudioControl" 
+2. Select **AudioControl Hyperion APR-16** from the list
+3. Install
+4. Restart Home Assistant
+5. Go to **Settings → Devices & Services → Add Integration**, search for "Hyperion", and follow the config flow, entering your Apr16's IP address.
+
+### HACS (deprecated)
 
 1. Make sure [HACS](https://hacs.xyz/) is installed in your Home Assistant instance.
 2. In Home Assistant, go to **HACS → Integrations → ⋮ → Custom repositories**.
@@ -21,7 +29,7 @@ Assistant](https://www.home-assistant.io/) integration for the [Hyperion Apr-16]
 5. Restart Home Assistant.
 6. Go to **Settings → Devices & Services → Add Integration**, search for "Hyperion", and follow the config flow, entering your Apr16's IP address.
 
-### Manual installation (alternative)
+### Manual installation (deprecated)
 
 Copy the `hyperion_apr16` directory from the downloaded .zip file into the `custom_components` directory of your Home Assistant configuration directory, and restart Home Assistant. Then return to step 6 above and add the integration via the UI.
 
@@ -29,7 +37,7 @@ Input your Apr-16 IP-address with port and after about 10-15 seconds sensors sho
 
 ## Updating
 
-**Via HACS:** HACS will show an update notification when a new version is released; click **Update**, then restart Home Assistant.
+**Via Marketplace:** Home Assistant will show an update notification when a new version is released; click **Update**, then restart Home Assistant.
 
 **Manual:** Delete the old `hyperion_apr16` directory from `custom components`, copy the new `hyperion_apr16` folder from the updated .zip file into `custom_components`, and restart Home Assistant.
 
