@@ -15,7 +15,7 @@ Assistant](https://www.home-assistant.io/) integration for the [Hyperion Apr-16]
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fattykidd&repository=ha-hyperion-apr16&category=integration)
 
 1. Click button above
-or
+### or
 1. Search Marketplace on your local Home Assistant for "Hyperion" or "AudioControl" 
 2. Select **AudioControl Hyperion APR-16** from the list
 3. Install
