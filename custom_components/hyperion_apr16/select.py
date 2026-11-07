@@ -99,9 +99,14 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
-        # Match the slot naming structure used across the custom integration
-        self._attr_options = ["Slot 0", "Slot 1", "Slot 2"]
         self._attr_native_value = None
+
+    @property
+    def options(self) -> list[str]:
+        """Return the dynamic list of Dirac filter slots from the coordinator."""
+        if not self.coordinator.data:
+            return ["Slot 0", "Slot 1", "Slot 2"]
+        return self.coordinator.data.get("dirac_filter_slots", ["Slot 0", "Slot 1", "Slot 2"])
 
     @property
     def current_option(self) -> str | None:
@@ -109,8 +114,8 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         return self._attr_native_value
 
     async def async_select_option(self, option: str) -> None:
-        """Change the active slot index by matching the selected name."""
-        slots = self._attr_options
+        """Change the active slot index by matching the selected custom name."""
+        slots = self.options
         try:
             slot_index = slots.index(option)
         except ValueError:
