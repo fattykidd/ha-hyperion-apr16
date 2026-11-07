@@ -52,7 +52,7 @@ class Apr16:
             _LOG.error("API request failed for %s: %s", url, err)
             raise
 
-    async def _send_atlas_request(self, endpoint: str, inner_payload: bytes = b"\x00") -> str:
+    async def _send_atlas_request(self, endpoint: str, inner_payload: bytes = b"") -> str:
         """Send a direct binary protocol request to the port 80 Atlas service."""
         url = f"http://{self.host}:80/commands.v1.AtlasService/{endpoint}"
         
@@ -90,9 +90,9 @@ class Apr16:
     # --- Dirac Methods for Port 80 Atlas Service ---
     
     async def async_get_dirac_filter_slots(self) -> str:
-        """Fetch Dirac filter slots for status updates (coordinator)."""
+        """Fetch Dirac filter slots for status updates."""
         try:
-            return await self._send_atlas_request("GetDiracFilterSlots", b"\x00")
+            return await self._send_atlas_request("GetDiracFilterSlots", b"")
         except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
             _LOG.debug("GetDiracFilterSlots request failed: %s", err)
             return ""
@@ -100,7 +100,7 @@ class Apr16:
     async def async_get_dirac_filter_slots_list(self) -> list[str]:
         """Get the list of Dirac filter slot names for the button platform."""
         try:
-            await self._send_atlas_request("GetDiracFilterSlots", b"\x00")
+            await self._send_atlas_request("GetDiracFilterSlots", b"")
             return []
         except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
             _LOG.debug("Failed to get Dirac filter slots list: %s", err)
