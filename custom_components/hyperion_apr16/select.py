@@ -99,7 +99,7 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
-        self._attr_options = ["Slot 0", "Slot 1", "Slot 2"]
+        # Remove self._attr_options so the dynamic options property is used instead
 
     @property
     def options(self) -> list[str]:
@@ -115,7 +115,6 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         if not slots:
             return None
         
-        # If native value is stored as an index or a string name, handle both safely
         if isinstance(self._attr_native_value, (int, float)) and 0 <= int(self._attr_native_value) < len(slots):
             return slots[int(self._attr_native_value)]
         if self._attr_native_value in slots:
