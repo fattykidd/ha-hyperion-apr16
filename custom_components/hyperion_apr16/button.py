@@ -39,7 +39,17 @@ async def async_setup_entry(
         HyperionBrightnessButton(coordinator, device, entry, "down"),
         HyperionVolumeButton(coordinator, device, entry, "up"),
         HyperionVolumeButton(coordinator, device, entry, "down"),
+        HyperionDiracFilteringButton(coordinator, device, entry, True),
+        HyperionDiracFilteringButton(coordinator, device, entry, False),
     ]
+
+    # Fetch custom slot names dynamically on setup for stateless slot buttons
+    try:
+        slot_names = await device.async_get_dirac_filter_slots_list()
+        for idx, slot_name in enumerate(slot_names):
+            buttons.append(HyperionDiracSlotButton(coordinator, device, entry, slot_name, idx))
+    except Exception as err:
+        _LOG.warning("Failed to fetch dynamic Dirac slots for buttons: %s", err)
 
     async_add_entities(buttons)
 
@@ -126,20 +136,16 @@ class HyperionToneButton(CoordinatorEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Handle the button press to adjust tone optimistically."""
         try:
-            # 1. Get current level and active input ID from coordinator data
             current_val = float(self.coordinator.data.get(self._tone_type, 0.0))
             input_id = self.coordinator.data.get("input_id", 1)
             
-            # 2. Calculate new level (clamped between -12 and 12 dB)
             new_level = round(max(-12.0, min(12.0, current_val + self._step)))
 
-            # 3. Send command to device
             if self._tone_type == "bass":
                 await self._device.set_input_bass(input_id, new_level)
             else:
                 await self._device.set_input_treble(input_id, new_level)
 
-            # 4. Optimistically update local coordinator data for instant UI response
             if self.coordinator.data:
                 self.coordinator.data[self._tone_type] = float(new_level)
                 self.coordinator.async_update_listeners()
@@ -156,7 +162,7 @@ class HyperionBrightnessButton(CoordinatorEntity, ButtonEntity):
         super().__init__(coordinator)
         self._device = device
         self._direction = direction  # "up" or "down"
-        self._step = 10  # 10% adjustment per press
+        self._step = 10
         
         self._attr_unique_id = f"{entry.entry_id}_brightness_{direction}"
         self._attr_name = f"{entry.title} Brightness {'Up' if direction == 'up' else 'Down'}"
@@ -171,7 +177,6 @@ class HyperionBrightnessButton(CoordinatorEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Handle the button press to adjust panel brightness optimistically."""
         try:
-            # Get current brightness from coordinator data (0-100 scale)
             current_brightness = int(self.coordinator.data.get("brightness", 50))
             
             if self._direction == "up":
@@ -179,16 +184,15 @@ class HyperionBrightnessButton(CoordinatorEntity, ButtonEntity):
             else:
                 new_brightness = max(0, current_brightness - self._step)
 
-            # 1. Send command to the device
             await self._device.set_brightness(new_brightness)
 
-            # 2. Optimistically update local coordinator data so slider & UI sync instantly
             if self.coordinator.data:
                 self.coordinator.data["brightness"] = new_brightness
                 self.coordinator.async_update_listeners()
 
         except (ClientError, OSError) as err:
             _LOG.error("Failed to adjust brightness %s: %s", self._direction, err)
+
 
 class HyperionVolumeButton(CoordinatorEntity, ButtonEntity):
     """Representation of a Volume Up or Down button."""
@@ -197,7 +201,7 @@ class HyperionVolumeButton(CoordinatorEntity, ButtonEntity):
         """Initialize the volume button."""
         super().__init__(coordinator)
         self._device = device
-        self._direction = direction  # "up" or "down"
+        self._direction = direction
         self._attr_unique_id = f"{entry.entry_id}_volume_{direction}"
         self._attr_name = f"{entry.title} Volume {'Up' if direction == 'up' else 'Down'}"
         self._attr_icon = "mdi:volume-plus" if direction == "up" else "mdi:volume-minus"
@@ -211,7 +215,6 @@ class HyperionVolumeButton(CoordinatorEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Handle the button press to adjust volume by 1%."""
         try:
-            # Get current volume from coordinator data (0-100 scale)
             current_vol = float(self.coordinator.data.get("volume", 0.0))
             
             if self._direction == "up":
@@ -219,13 +222,44 @@ class HyperionVolumeButton(CoordinatorEntity, ButtonEntity):
             else:
                 new_vol = max(0.0, current_vol - 1.0)
 
-            # 1. Send the command to the device immediately
             await self._device.set_volume(new_vol)
 
-            # 2. Optimistically update local coordinator data so UI responds instantly
             if self.coordinator.data:
                 self.coordinator.data["volume"] = new_vol
                 self.coordinator.async_update_listeners()
 
         except (ClientError, OSError) as err:
             _LOG.error("Failed to adjust volume %s: %s", self._direction, err)
+
+
+class HyperionDiracFilteringButton(HyperionBaseButton):
+    """Stateless button to enable or disable master Dirac filtering."""
+
+    def __init__(self, coordinator, device, entry, enable: bool) -> None:
+        action = "Enable" if enable else "Disable"
+        super().__init__(coordinator, device, entry, f"dirac_{action.lower()}", f"Dirac {action}")
+        self._enable = enable
+        self._attr_icon = "mdi:check-network" if enable else "mdi:close-network"
+
+    async def async_press(self) -> None:
+        """Handle button press to set Dirac filtering state."""
+        try:
+            await self._device.async_set_dirac_filtering(self._enable)
+        except (ClientError, OSError) as err:
+            _LOG.error("Failed to set Dirac filtering to %s: %s", self._enable, err)
+
+
+class HyperionDiracSlotButton(HyperionBaseButton):
+    """Stateless button to activate a specific custom Dirac filter slot."""
+
+    def __init__(self, coordinator, device, entry, slot_name: str, slot_index: int) -> None:
+        super().__init__(coordinator, device, entry, f"dirac_slot_{slot_index}", f"Dirac Slot: {slot_name}")
+        self._slot_index = slot_index
+        self._attr_icon = "mdi:playlist-check"
+
+    async def async_press(self) -> None:
+        """Handle button press to switch to this custom slot."""
+        try:
+            await self._device.async_set_dirac_filter_slot(self._slot_index)
+        except (ClientError, OSError) as err:
+            _LOG.error("Failed to switch to Dirac slot index %d: %s", self._slot_index, err)

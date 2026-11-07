@@ -86,6 +86,24 @@ class Apr16:
             return response_text
 
     # --- Dirac Methods for Port 80 Atlas Service ---
+    
+    async def async_get_dirac_filter_slots_list(self) -> list[str]:
+        """Fetch and parse user-defined Dirac filter slot names from the Atlas service."""
+        try:
+            raw_text = await self._send_atlas_request("GetDiracFilterSlots", b"")
+            import re
+            # Extract quoted strings that represent user filter names (filtering out system labels)
+            matches = re.findall(r'"([^"]+)"', raw_text)
+            slots = []
+            for m in matches:
+                # Clean and keep user-meaningful slot names
+                if len(m) > 1 and "hyperion" not in m.lower() and "active room treatment" not in m.lower():
+                    if m not in slots:
+                        slots.append(m)
+            return slots if slots else ["Slot 0", "Slot 1", "Slot 2"]
+        except Exception as err:
+            _LOG.warning("Failed to parse Dirac slot names: %s", err)
+            return ["Slot 0", "Slot 1", "Slot 2"]
 
     async def async_get_dirac_filter_slots(self) -> str:
         """Fetch raw filter slots response from the Atlas service."""
