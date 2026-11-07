@@ -154,16 +154,18 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_select_source(self, source: str) -> None:
-        """Select input source by matching user-defined name or falling back to raw string."""
+        """Select input source by matching user-defined name to its integer ID."""
         data = self.coordinator.data or {}
         input_map = data.get("input_names", {})
         
-        # Reverse lookup input_id from custom name if map exists
+        # Reverse lookup: find the integer ID (key) by its custom name (value)
         target_id = next((k for k, v in input_map.items() if v == source), None)
         
         if target_id is not None:
             await self._device.set_active_input(target_id)
         else:
-            await self._device.set_active_input(source)
+            # Fallback if name wasn't found in map
+            _LOG.warning("Could not find integer ID for input name '%s', defaulting to ID 1", source)
+            await self._device.set_active_input(1)
             
         await self.coordinator.async_request_refresh()
