@@ -238,6 +238,8 @@ class Apr16:
             "video_detail": video_detail,
             "temperature": temperature,
             "dirac_slots_raw": dirac_slots,
+            "dirac_active": True,
+            "dirac_slot": 0,
         }
 
     async def power_on(self) -> None:
