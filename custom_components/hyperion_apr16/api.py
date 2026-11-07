@@ -52,8 +52,8 @@ class AtlasDiracController:
                         return await self._post_command(endpoint, inner_payload, retry=False)
 
                 if response.status >= 400:
-                    error_text = await response.text()
-                    _LOG.error("Atlas RPC 500 error body for %s: %s", endpoint, error_text)
+                    error_body = await response.text()
+                    _LOG.error("Atlas RPC 500 error body for %s: %s", endpoint, error_body)
 
                 response.raise_for_status()
                 return await response.text()
@@ -63,7 +63,8 @@ class AtlasDiracController:
 
     async def set_filter_slot(self, slot_index: int) -> bool:
         """Set the active Dirac filter slot by index (e.g., 0, 1, 2)."""
-        # Protobuf field 1, varint wire type -> tag 0x08, followed by slot_index value
+        # Some Atlas RPC schemas require field 1 (tag 0x08) wrapped or direct varint.
+        # If flat tag 0x08 triggers a 500 error, the firmware may expect a nested message wrapper (e.g., tag 0x0a + length).
         inner_payload = bytes([0x08, slot_index])
         res = await self._post_command("SetDiracFilterSlot", inner_payload)
         return res is not None
