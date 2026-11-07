@@ -89,19 +89,26 @@ class Apr16:
         return await self._send_atlas_request("GetDiracFilterSlots", b"")
 
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
-        """Switch active Dirac filter slot by index (0, 1, 2)."""
+        """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
+        # Slot 0: \x10\x01 -> hex: 1001
+        # Slot 1: \x08\x01\x10\x01 -> hex: 08011001
+        # Slot 2: \x08\x02\x10\x01 -> hex: 08021001
         payload_map = {
-            0: b"\x10\x01",
-            1: b"\x08\x01\x10\x01",
-            2: b"\x08\x02\x10\x01",
+            0: bytes.fromhex("1001"),
+            1: bytes.fromhex("08011001"),
+            2: bytes.fromhex("08021001"),
         }
-        inner_payload = payload_map.get(slot_index, b"\x10\x01")
+        inner_payload = payload_map.get(slot_index, bytes.fromhex("1001"))
         res = await self._send_atlas_request("SetDiracFilterSlot", inner_payload)
         return res is not None
 
     async def async_set_dirac_filtering(self, enabled: bool) -> bool:
-        """Enable or disable master Dirac filtering."""
-        inner_payload = b"\x08\x01\x10\x01\x18\x01" if enabled else b"\x10\x01\x18\x01"
+        """Enable or disable master Dirac filtering using hex-decoded bytes."""
+        # Filtering Off: \x10\x01\x18\x01 -> hex: 10011801
+        # Filtering On:  \x08\x01\x10\x01\x18\x01 -> hex: 080110011801
+        inner_payload = (
+            bytes.fromhex("080110011801") if enabled else bytes.fromhex("10011801")
+        )
         res = await self._send_atlas_request("SetDiracFiltering", inner_payload)
         return res is not None
 
