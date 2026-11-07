@@ -107,11 +107,16 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         return self.coordinator.data.get("dirac_slots", [])
 
     @property
-    def current_option(self) -> str:
-        """Return the currently active slot name."""
+    def current_option(self) -> str | None:
+        """Return the currently selected Dirac filter slot."""
         slots = self.options
-        index = self.coordinator.data.get("dirac_slot_index", 0)
-        return slots[index] if 0 <= index < len(slots) else slots[0]
+        if not slots:
+            return None
+        
+        # Ensure index is within bounds, defaulting safely to the first slot
+        if 0 <= self._attr_native_value < len(slots):
+            return slots[int(self._attr_native_value)]
+        return slots[0]
 
     async def async_select_option(self, option: str) -> None:
         """Change the active slot index by matching the selected user-defined name."""
