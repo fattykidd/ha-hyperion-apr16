@@ -103,8 +103,8 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     @property
     def options(self) -> list[str]:
-        """Return the list of user-defined Dirac slot names."""
-        return self.coordinator.data.get("dirac_slots", ["Slot 0", "Slot 1", "Slot 2"])
+        """Return the list of available Dirac filter slot options."""
+        return self.coordinator.data.get("dirac_slots", [])
 
     @property
     def current_option(self) -> str:

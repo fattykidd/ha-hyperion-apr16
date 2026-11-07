@@ -111,16 +111,25 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self.client:
                 try:
                     raw_slots = await self.client.get_filter_slots()
-                    # Clean binary gRPC data into readable user slot names using regex
                     if isinstance(raw_slots, bytes):
                         text_data = raw_slots.decode("utf-8", errors="ignore")
                     else:
                         text_data = str(raw_slots)
                     
-                    found_slots = re.findall(r'([0-9]+\s*dB\s+[a-zA-Z0-9\-\s]+|[a-zA-Z0-9\-\s]+current)', text_data)
-                    cleaned_slots = [s.strip() for s in found_slots if len(s.strip()) > 2]
+                    # Store raw debug data if needed
+                    data["dirac_filter_slots_raw"] = text_data
+
+                    # Extract clean slot names (e.g. "2dB current", "4dB current") before notes
+                    raw_matches = re.findall(r'([0-9a-zA-Z\s]+current)', text_data)
                     
-                    data["dirac_filter_slots"] = list(dict.fromkeys(cleaned_slots)) if cleaned_slots else ["Slot 0", "Slot 1"]
+                    cleaned_slots = []
+                    for match in raw_matches:
+                        # Strip control characters (like \x0b) and trailing whitespace
+                        cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', match).strip()
+                        if cleaned and cleaned not in cleaned_slots:
+                            cleaned_slots.append(cleaned)
+                    
+                    data["dirac_filter_slots"] = cleaned_slots if cleaned_slots else ["Slot 0", "Slot 1"]
                 except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
                     _LOG.debug("Could not parse Dirac filter slots: %s", err)
                     data["dirac_filter_slots"] = ["Slot 0", "Slot 1"]

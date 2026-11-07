@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from aiohttp import ClientError, ClientSession
 
 from .config import APR16Config
 from .helper import percent_to_db
-import re
 
 _LOG = logging.getLogger(__name__)
 
@@ -102,17 +102,16 @@ class Apr16:
         """Get the list of clean Dirac filter slot names for the select platform."""
         try:
             response_text = await self._send_atlas_request("GetDiracFilterSlots", b"")
-            # Extract lines or patterns matching the slot names before the notes delimiter
-            # Adjusting regex to capture the slot name prefix (e.g., "2dB current", "4dB current")
+            # Extract text patterns matching the slot names
             raw_matches = re.findall(r'([0-9a-zA-Z\s]+current)', response_text)
-            # Fallback or general pattern if slot names vary: capture text before any control chars/notes
-            if not raw_matches:
-                raw_matches = [line.strip() for line in response_text.split('\n') if 'current' in line]
             
-            # Deduplicate while preserving order
-            seen = set()
-            slot_names = [x for x in raw_matches if not (x in seen or seen.add(x))]
-            
+            slot_names = []
+            for match in raw_matches:
+                # Remove ASCII control characters (like \x0b) and trim whitespace
+                cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', match).strip()
+                if cleaned and cleaned not in slot_names:
+                    slot_names.append(cleaned)
+                    
             return slot_names if slot_names else []
         except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
             _LOG.debug("Failed to get Dirac filter slots list: %s", err)
