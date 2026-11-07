@@ -56,10 +56,14 @@ class Apr16:
         """Send a Connect-RPC binary protocol request to the port 80 Atlas service."""
         url = f"http://{self.host}:80/commands.v1.AtlasService/{endpoint}"
         
+        # gRPC-web framing: 1-byte compression flag (0x00) + 4-byte big-endian length
+        framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload if inner_payload else b""
+        
         headers = {
             "Accept": "*/*",
             "Connect-Protocol-Version": "1",
             "Content-Type": "application/proto",
+            "Content-Length": str(len(framed_content)),
             "Origin": f"http://{self.host}:80",
             "Referer": f"http://{self.host}:80/",
             "User-Agent": "HomeAssistant-HyperionIntegration/1.0",
@@ -71,11 +75,13 @@ class Apr16:
             "atlas_served_asset_session": cookie_val,
         }
 
-        _LOG.debug("Sending Atlas request to %s with session cookie: %s", endpoint, cookie_val[:10] + "..." if cookie_val else "EMPTY")
-
-        framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload if inner_payload else b""
-
-        async with self._session.post(url, headers=headers, cookies=cookies, data=framed_content, timeout=10) as response:
+        async with self._session.post(
+            url, 
+            headers=headers, 
+            cookies=cookies, 
+            data=framed_content, 
+            timeout=10
+        ) as response:
             if response.status >= 400:
                 err_text = await response.text()
                 _LOG.error("Atlas RPC 500 error response for %s: %s", endpoint, err_text)
