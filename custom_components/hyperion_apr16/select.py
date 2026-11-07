@@ -106,14 +106,18 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
+        # Initialize with whatever is currently in coordinator data, or fallback
+        self._attr_options = (
+            coordinator.data.get("dirac_filter_slots")
+            if coordinator.data
+            else None
+        ) or ["Slot 0", "Slot 1", "Slot 2"]
         self._attr_native_value = None
 
     @property
     def options(self) -> list[str]:
-        """Return the dynamic list of Dirac filter slots directly from coordinator data."""
-        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
-            return self.coordinator.data["dirac_filter_slots"]
-        return ["Slot 0", "Slot 1", "Slot 2"] # Fallback options if coordinator data is unavailable
+        """Return the dynamic list of Dirac filter slots."""
+        return self._attr_options
 
     @property
     def current_option(self) -> str | None:
@@ -121,8 +125,10 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         return self._attr_native_value
 
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator and refresh entity state/options."""
-        self.async_write_ha_state()
+        """Handle updated data from the coordinator and update options."""
+        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
+            self._attr_options = self.coordinator.data["dirac_filter_slots"]
+        super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
         """Change the active slot index by matching the selected custom name."""
