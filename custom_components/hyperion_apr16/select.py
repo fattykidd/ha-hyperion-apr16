@@ -43,7 +43,7 @@ async def async_setup_entry(
     device = data["device"]
 
     # Pull the exact slot list from coordinator data, with a safe fallback
-    slot_names = (
+    (
         coordinator.data.get("dirac_filter_slots")
         if coordinator.data
         else None
