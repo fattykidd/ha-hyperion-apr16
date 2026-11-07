@@ -50,7 +50,7 @@ async def async_setup_entry(
 
     async_add_entities([
         HyperionAudioModeSelect(coordinator, device, entry),
-        HyperionDiracSlotSelect(coordinator, device, entry, slot_names)
+        HyperionDiracSlotSelect(coordinator, device, entry)
     ])
 
 
