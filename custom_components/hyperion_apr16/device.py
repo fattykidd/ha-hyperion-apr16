@@ -37,7 +37,7 @@ class Apr16:
         
         # Port 80 explicit base URL for Connect-RPC / Atlas service endpoints
         self._atlas_base_url = f"http://{self.host}:80/commands.v1.AtlasService"
-        self.session_cookie = session_cookie
+        self.session_cookie = "bed02d8192fde912e17a46e5b1bb0c5c"
 
     async def _send_request(self, method: str, endpoint: str, data: dict[str, Any] | None = None) -> Any:
         """Send an HTTP request to the APR-16 API using the shared session."""
@@ -65,14 +65,20 @@ class Apr16:
             "User-Agent": "HomeAssistant-HyperionIntegration/1.0",
         }
         
+        cookie_val = self.session_cookie or ""
         cookies = {
             "forceUpdate": "true",
-            "atlas_served_asset_session": self.session_cookie or "",
+            "atlas_served_asset_session": cookie_val,
         }
+
+        _LOG.debug("Sending Atlas request to %s with session cookie: %s", endpoint, cookie_val[:10] + "..." if cookie_val else "EMPTY")
 
         framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload if inner_payload else b""
 
         async with self._session.post(url, headers=headers, cookies=cookies, data=framed_content, timeout=10) as response:
+            if response.status >= 400:
+                err_text = await response.text()
+                _LOG.error("Atlas RPC 500 error response for %s: %s", endpoint, err_text)
             response.raise_for_status()
             return await response.text()
 
