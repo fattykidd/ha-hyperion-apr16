@@ -16,6 +16,7 @@ from .const import DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
 
 _LOG = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 # Map clean UI display names to the exact backend API strings
 AUDIO_MODE_MAPPING = {
@@ -106,17 +107,13 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
+        self._attr_options = ["Slot 1", "Slot 2", "Slot 3"]
         self._attr_native_value = None
 
     @property
     def options(self) -> list[str]:
-        """Return dynamic slot names only when coordinator data is fully available."""
-        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
-            slots = self.coordinator.data["dirac_filter_slots"]
-            if slots:
-                return slots
-                
-        return []
+        """Return the current options list."""
+        return self._attr_options
 
     @property
     def current_option(self) -> str | None:
@@ -124,8 +121,16 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         return self._attr_native_value
 
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator and refresh state."""
-        self.async_write_ha_state()
+        """Handle updated data from the coordinator and repopulate options."""
+        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
+            new_slots = self.coordinator.data["dirac_filter_slots"]
+            _LOGGER.warning("DEBUG: Coordinator returned dirac_filter_slots -> %r", new_slots)
+            if new_slots:
+                self._attr_options = new_slots
+        else:
+            _LOGGER.warning("DEBUG: coordinator.data missing dirac_filter_slots. Current coordinator.data: %r", self.coordinator.data)
+            
+        super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
         """Change the active slot index by matching the selected custom name."""
