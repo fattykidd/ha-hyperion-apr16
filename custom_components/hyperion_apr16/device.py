@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from aiohttp import ClientError, ClientSession
@@ -53,14 +52,14 @@ class Apr16:
             _LOG.error("API request failed for %s: %s", url, err)
             raise
 
-    async def _send_atlas_request(self, endpoint: str, payload: dict | None = None) -> dict | str:
-        """Send a direct JSON protocol request to the port 80 Atlas Connect-RPC service."""
+    async def _send_atlas_request(self, endpoint: str, inner_payload: bytes = b"\x00") -> str:
+        """Send a direct binary protocol request to the port 80 Atlas service."""
         url = f"http://{self.host}:80/commands.v1.AtlasService/{endpoint}"
         
         headers = {
-            "Accept": "application/json",
+            "Accept": "*/*",
             "Connect-Protocol-Version": "1",
-            "Content-Type": "application/json",
+            "Content-Type": "application/proto",
             "Origin": f"http://{self.host}:80",
             "Referer": f"http://{self.host}:80/",
             "User-Agent": "HomeAssistant-HyperionIntegration/1.0",
@@ -70,63 +69,42 @@ class Apr16:
             "forceUpdate": "true",
             "atlas_served_asset_session": self.session_cookie,
         }
-        
-        req_payload = payload if payload is not None else {}
-        
-        async with self._session.post(
-            url, 
-            headers=headers, 
-            cookies=cookies, 
-            json=req_payload, 
-            timeout=10
-        ) as response:
-            response_text = await response.text()
-            if response.status >= 400:
-                _LOG.error("Atlas RPC error response for %s: %s", endpoint, response_text)
-            response.raise_for_status()
-            
-            if response.content_type == "application/json":
-                return await response.json()
-            return response_text
+
+        try:
+            async with self._session.post(
+                url, 
+                headers=headers, 
+                cookies=cookies, 
+                data=inner_payload, 
+                timeout=10
+            ) as response:
+                response_text = await response.text()
+                if response.status >= 400:
+                    _LOG.error("Atlas RPC error response for %s: %s", endpoint, response_text)
+                response.raise_for_status()
+                return response_text
+        except (ClientError, TimeoutError, OSError) as err:
+            _LOG.error("Atlas request failed for %s: %s", url, err)
+            raise
 
     # --- Dirac Methods for Port 80 Atlas Service ---
     
-    async def async_get_dirac_filter_slots_list(self) -> list[str]:
-        """Extract custom Dirac slot names from the raw gRPC response."""
+    async def async_get_dirac_filter_slots(self) -> str:
+        """Fetch Dirac filter slots for status updates (coordinator)."""
         try:
-            # Call your existing gRPC method that queries GetDiracFilterSlots
-            raw_response = await self._send_atlas_request("GetDiracFilterSlots", b"\x00")
-        
-            if not raw_response:
-                return ["Slot 0", "Slot 1", "Slot 2"]
-
-            # Decode raw bytes to string, ignoring unparseable binary characters
-            text_data = raw_response.decode("utf-8", errors="ignore")
-        
-            # Look for patterns matching your slot naming convention (e.g., "4dB current", etc.)
-            # Or extract sequences ending in "current" / containing "dB"
-            found_slots = re.findall(r'([0-9]+\s*dB\s+[a-zA-Z0-9\-\s]+|[a-zA-Z0-9\-\s]+current)', text_data)
-        
-            # Clean and deduplicate found slot names
-            cleaned_slots = [s.strip() for s in found_slots if len(s.strip()) > 2]
-        
-            # Fallback if regex doesn't catch clean matches
-            if not cleaned_slots:
-                return ["Slot 0", "Slot 1", "Slot 2"]
-            
-            return list(dict.fromkeys(cleaned_slots))  # Remove duplicates preserving order
-        
-        except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
-            _LOG.error("Failed to parse Dirac slots: %s", err)
-            return ["Slot 0", "Slot 1", "Slot 2"]
-
-    async def async_get_dirac_filter_slots(self) -> dict | str:
-        """Fetch Dirac filter slots via Connect-RPC JSON endpoint."""
-        try:
-            return await self._send_atlas_request("GetDiracFilterSlots", {})
+            return await self._send_atlas_request("GetDiracFilterSlots", b"\x00")
         except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
             _LOG.debug("GetDiracFilterSlots request failed: %s", err)
-            return {}
+            return ""
+
+    async def async_get_dirac_filter_slots_list(self) -> list[str]:
+        """Get the list of Dirac filter slot names for the button platform."""
+        try:
+            await self._send_atlas_request("GetDiracFilterSlots", b"\x00")
+            return []
+        except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+            _LOG.debug("Failed to get Dirac filter slots list: %s", err)
+            return []
 
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
