@@ -32,6 +32,7 @@ async def async_setup_entry(
         HyperionMuteSwitch(coordinator, device, entry),
         HyperionDisplayPowerSwitch(coordinator, device, entry),
         HyperionTriggerSwitch(coordinator, device, entry),
+        HyperionDiracFilteringSwitch(coordinator, device, entry),
     ]
 
     async_add_entities(switches)
@@ -146,4 +147,26 @@ class HyperionTriggerSwitch(HyperionBaseSwitch):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable 12V trigger output."""
         await self._device.set_trigger(False)
+        await self.coordinator.async_request_refresh()
+
+
+class HyperionDiracFilteringSwitch(HyperionBaseSwitch):
+    """Switch to toggle master Dirac filtering state."""
+
+    def __init__(self, coordinator, device, entry):
+        super().__init__(coordinator, device, entry, "dirac_filtering", "Dirac Filtering")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if Dirac filtering is active."""
+        return bool(self.coordinator.data.get("dirac_filtering_enabled", False))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable Dirac filtering."""
+        await self._device.async_set_dirac_filtering(True)
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable Dirac filtering."""
+        await self._device.async_set_dirac_filtering(False)
         await self.coordinator.async_request_refresh()

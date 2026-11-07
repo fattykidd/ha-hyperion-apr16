@@ -1,4 +1,4 @@
-"""Select entity for AudioControl Hyperion APR-16 audio modes."""
+"""Select entities for AudioControl Hyperion APR-16 audio modes and Dirac slots."""
 
 from __future__ import annotations
 
@@ -28,7 +28,6 @@ AUDIO_MODE_MAPPING = {
     "Dolby Surround": "dolby surround",
 }
 
-# Reverse mapping to display friendly names from the raw API state
 API_TO_UI_MAPPING = {v: k for k, v in AUDIO_MODE_MAPPING.items()}
 
 
@@ -37,35 +36,47 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Hyperion select entity from a config entry."""
+    """Set up Hyperion select entities from a config entry."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
     device = data["device"]
 
-    async_add_entities([HyperionAudioModeSelect(coordinator, device, entry)])
+    async_add_entities([
+        HyperionAudioModeSelect(coordinator, device, entry),
+        HyperionDiracSlotSelect(coordinator, device, entry),
+    ])
 
 
-class HyperionAudioModeSelect(CoordinatorEntity, SelectEntity):
-    """Representation of the Audio Mode select entity."""
+class HyperionBaseSelect(CoordinatorEntity, SelectEntity):
+    """Base class for Hyperion select entities ensuring proper device grouping."""
 
     def __init__(
         self,
         coordinator: HyperionDataUpdateCoordinator,
         device: Any,
         entry: ConfigEntry,
+        key: str,
+        name_suffix: str,
     ) -> None:
         """Initialize the select entity."""
         super().__init__(coordinator)
         self._device = device
-        self._attr_unique_id = f"{entry.entry_id}_audio_mode"
-        self._attr_name = f"{entry.title} Audio Mode"
-        self._attr_options = list(AUDIO_MODE_MAPPING.keys())
+        self._attr_unique_id = f"{entry.entry_id}_{key}"
+        self._attr_name = f"{entry.title} {name_suffix}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": entry.title,
             "manufacturer": "AudioControl",
             "model": "Hyperion APR-16",
         }
+
+
+class HyperionAudioModeSelect(HyperionBaseSelect):
+    """Representation of the Audio Mode select entity."""
+
+    def __init__(self, coordinator, device, entry) -> None:
+        super().__init__(coordinator, device, entry, "audio_mode", "Audio Mode")
+        self._attr_options = list(AUDIO_MODE_MAPPING.keys())
 
     @property
     def current_option(self) -> str | None:
@@ -76,9 +87,31 @@ class HyperionAudioModeSelect(CoordinatorEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Change the selected audio mode."""
         try:
-            # Look up the clean UI name and send the corresponding backend string
             api_value = AUDIO_MODE_MAPPING.get(option, "native")
             await self._device.set_audio_mode(api_value)
             await self.coordinator.async_request_refresh()
         except (ClientError, OSError) as err:
             _LOG.error("Failed to set audio mode to %s: %s", option, err)
+
+
+class HyperionDiracSlotSelect(HyperionBaseSelect):
+    """Representation of the Dirac Filter Slot select entity."""
+
+    def __init__(self, coordinator, device, entry) -> None:
+        super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
+        self._attr_options = ["Slot 0", "Slot 1", "Slot 2"]
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the currently selected Dirac slot option."""
+        slot_idx = self.coordinator.data.get("current_dirac_slot", 0)
+        return f"Slot {slot_idx}"
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the selected Dirac filter slot."""
+        try:
+            slot_idx = int(option.replace("Slot ", ""))
+            await self._device.async_set_dirac_filter_slot(slot_idx)
+            await self.coordinator.async_request_refresh()
+        except (ClientError, OSError) as err:
+            _LOG.error("Failed to set Dirac filter slot to %s: %s", option, err)
