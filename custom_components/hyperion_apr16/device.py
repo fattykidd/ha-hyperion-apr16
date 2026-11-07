@@ -54,7 +54,7 @@ class Apr16:
 
     async def _send_atlas_request(self, endpoint: str, inner_payload: bytes = b"") -> str:
         """Send a Connect-RPC binary protocol request to the port 80 Atlas service."""
-        url = f"{self._atlas_base_url}/{endpoint}"
+        url = f"http://{self.host}:80/commands.v1.AtlasService/{endpoint}"
         
         headers = {
             "Accept": "*/*",
@@ -70,25 +70,11 @@ class Apr16:
             "atlas_served_asset_session": self.session_cookie or "",
         }
 
-        # Wrap in Connect-RPC 5-byte envelope if payload exists
-        if inner_payload:
-            framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload
-        else:
-            framed_content = b""
+        framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload if inner_payload else b""
 
-        try:
-            async with self._session.post(
-                url, 
-                headers=headers, 
-                cookies=cookies, 
-                data=framed_content, 
-                timeout=10
-            ) as response:
-                response.raise_for_status()
-                return await response.text()
-        except (ClientError, TimeoutError, OSError) as err:
-            _LOG.error("Atlas RPC request failed for %s: %s", url, err)
-            raise
+        async with self._session.post(url, headers=headers, cookies=cookies, data=framed_content, timeout=10) as response:
+            response.raise_for_status()
+            return await response.text()
 
     # --- Dirac Methods for Port 80 Atlas Service ---
 
@@ -98,13 +84,18 @@ class Apr16:
 
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch active Dirac filter slot by index (0, 1, 2)."""
-        inner_payload = bytes([0x10, slot_index])
+        payload_map = {
+            0: b"\x10\x01",
+            1: b"\x08\x01\x10\x01",
+            2: b"\x08\x02\x10\x01",
+        }
+        inner_payload = payload_map.get(slot_index, b"\x10\x01")
         res = await self._send_atlas_request("SetDiracFilterSlot", inner_payload)
         return res is not None
 
     async def async_set_dirac_filtering(self, enabled: bool) -> bool:
         """Enable or disable master Dirac filtering."""
-        inner_payload = bytes([0x08, 0x01, 0x10, 0x01, 0x18, 0x01]) if enabled else bytes([0x08, 0x00, 0x10, 0x01, 0x18, 0x01])
+        inner_payload = b"\x08\x01\x10\x01\x18\x01" if enabled else b"\x10\x01\x18\x01"
         res = await self._send_atlas_request("SetDiracFiltering", inner_payload)
         return res is not None
 

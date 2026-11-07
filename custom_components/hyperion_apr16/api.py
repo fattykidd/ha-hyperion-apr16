@@ -1,27 +1,32 @@
-"""API client for AudioControl Hyperion APR-16 Atlas service (Dirac controls)."""
-
+"""API client for AudioControl Hyperion APR-16 Atlas service."""
 from __future__ import annotations
 
 import logging
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientSession
 
 _LOG = logging.getLogger(__name__)
 
 
-class AtlasDiracController:
-    """Async gRPC-web Connect-RPC client for AudioControl Atlas service on port 80."""
+class HyperionAPI:
+    """Client for communicating with the Hyperion Atlas gRPC-web service."""
 
-    def __init__(self, host: str, port: int = 80, session: ClientSession | None = None, session_cookie: str | None = None) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int = 80,
+        session: ClientSession | None = None,
+        session_cookie: str | None = None,
+    ) -> None:
         self.host = host
         self.port = port
         self.base_url = f"http://{host}:{port}/commands.v1.AtlasService"
         self._session = session
         self.session_cookie = session_cookie
         self.headers = {
-            "Accept": "application/json, text/plain, */*",
+            "Accept": "*/*",
             "Connect-Protocol-Version": "1",
-            "Content-Type": "application/json",
+            "Content-Type": "application/proto",
             "Origin": f"http://{host}:{port}",
             "Referer": f"http://{host}:{port}/",
             "User-Agent": "HomeAssistant-HyperionIntegration/1.0",
@@ -31,74 +36,31 @@ class AtlasDiracController:
             "atlas_served_asset_session": session_cookie or "",
         }
 
-    async def _post_command(self, endpoint: str, payload_dict: dict | None = None, retry: bool = True) -> str:
+    async def _post_command(self, endpoint: str, inner_payload: bytes = b"") -> str:
         url = f"{self.base_url}/{endpoint}"
-        
-        # Connect-RPC supports application/json directly without 5-byte binary framing
-        import json
-        data = json.dumps(payload_dict or {})
+        framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload
 
-        try:
-            if not self._session:
-                raise RuntimeError("Aiohttp session missing")
-
-            async with self._session.post(
-                url,
-                headers=self.headers,
-                cookies=self.cookies,
-                data=data,
-                timeout=10,
-            ) as response:
-                response_text = await response.text()
-
-                if response.status in (401, 500) and retry:
-                    _LOG.warning("Atlas RPC returned status %s. Refreshing session...", response.status)
-                    if await self.async_refresh_session():
-                        return await self._post_command(endpoint, payload_dict, retry=False)
-
-                if response.status >= 400:
-                    _LOG.error("Atlas RPC 500 error body for %s: %s", endpoint, response_text)
-
-                response.raise_for_status()
-                return response_text
-        except (ClientError, TimeoutError, OSError) as err:
-            _LOG.error("Atlas RPC command failed for %s: %s", url, err)
-            raise
-
-    async def set_filter_slot(self, slot_index: int) -> bool:
-        """Set the active Dirac filter slot by index using JSON payload."""
-        # Connect-RPC maps protobuf fields to JSON keys (e.g. slotIndex or slot)
-        payload = {"slotIndex": slot_index}
-        res = await self._post_command("SetDiracFilterSlot", payload)
-        return res is not None
+        async with self._session.post(
+            url,
+            headers=self.headers,
+            cookies=self.cookies,
+            data=framed_content,
+            timeout=10,
+        ) as response:
+            response.raise_for_status()
+            return await response.text()
 
     async def set_dirac_filtering(self, enabled: bool) -> bool:
-        """Enable or disable master Dirac filtering using JSON payload."""
-        payload = {"enabled": enabled}
-        res = await self._post_command("SetDiracFiltering", payload)
+        inner_payload = b"\x08\x01\x10\x01\x18\x01" if enabled else b"\x10\x01\x18\x01"
+        res = await self._post_command("SetDiracFiltering", inner_payload)
         return res is not None
 
-    async def get_filter_slots(self) -> str:
-        """Fetch raw response containing filter slot descriptions."""
-        return await self._post_command("GetDiracFilterSlots", b"")
-
-    async def async_refresh_session(self) -> bool:
-        """Fetch a fresh session cookie from the device web root."""
-        root_url = f"http://{self.host}:{self.port}/"
-        try:
-            if not self._session:
-                return False
-                
-            async with self._session.get(root_url, timeout=5) as response:
-                set_cookie = response.headers.get("Set-Cookie", "")
-                if "atlas_served_asset_session=" in set_cookie:
-                    for part in set_cookie.split(";"):
-                        if "atlas_served_asset_session=" in part:
-                            token = part.split("=")[1].strip()
-                            self.session_cookie = token
-                            self.cookies["atlas_served_asset_session"] = token
-                            _LOG.debug("Refreshed session cookie successfully")
-                            return True
-        except (ClientError, TimeoutError, OSError) as err:
-            _LOG.warning("Failed to refresh session cookie: %s", err)
-        return False
+    async def set_filter_slot(self, slot_index: int) -> bool:
+        payload_map = {
+            0: b"\x10\x01",
+            1: b"\x08\x01\x10\x01",
+            2: b"\x08\x02\x10\x01",
+        }
+        inner_payload = payload_map.get(slot_index, b"\x10\x01")
+        res = await self._post_command("SetDiracFilterSlot", inner_payload)
+        return res is not None

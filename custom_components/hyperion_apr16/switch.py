@@ -162,11 +162,11 @@ class HyperionDiracFilteringSwitch(HyperionBaseSwitch):
         return bool(self.coordinator.data.get("dirac_filtering_enabled", False))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable Dirac filtering."""
+        """Turn master Dirac filtering on."""
         await self._device.async_set_dirac_filtering(True)
-        await self.coordinator.async_request_refresh()
+        await self.async_update()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable Dirac filtering."""
+        """Turn master Dirac filtering off."""
         await self._device.async_set_dirac_filtering(False)
-        await self.coordinator.async_request_refresh()
+        await self.async_update()

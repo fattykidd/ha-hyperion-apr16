@@ -108,10 +108,11 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         return f"Slot {slot_idx}"
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected Dirac filter slot."""
+        """Change the selected Dirac filter slot option."""
         try:
-            slot_idx = int(option.replace("Slot ", ""))
-            await self._device.async_set_dirac_filter_slot(slot_idx)
-            await self.coordinator.async_request_refresh()
+            slot_map = {"Slot 0": 0, "Slot 1": 1, "Slot 2": 2}
+            slot_index = slot_map.get(option, 0)
+            await self._device.async_set_dirac_filter_slot(slot_index)
+            await self.async_update()
         except (ClientError, OSError) as err:
             _LOG.error("Failed to set Dirac filter slot to %s: %s", option, err)
