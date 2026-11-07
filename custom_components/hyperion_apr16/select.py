@@ -113,12 +113,16 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         """Return the dynamic list of Dirac filter slots directly from coordinator data."""
         if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
             return self.coordinator.data["dirac_filter_slots"]
-        return ["Slot 0", "Slot 1"]
+        return ["Slot 0", "Slot 1", "Slot 2"] # Fallback options if coordinator data is unavailable
 
     @property
     def current_option(self) -> str | None:
         """Return the currently selected slot, preserving local state."""
         return self._attr_native_value
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator and refresh entity state/options."""
+        self.async_write_ha_state()
 
     async def async_select_option(self, option: str) -> None:
         """Change the active slot index by matching the selected custom name."""
