@@ -35,19 +35,23 @@ class AtlasDiracController:
         url = f"{self.base_url}/{endpoint}"
         framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload
 
+        # Ensure explicit connection headers are present
+        headers = {**self.headers, "Connection": "keep-alive"}
+
         try:
             if not self._session:
                 raise RuntimeError("Aiohttp session missing")
 
+            _LOG.debug("Sending POST to %s with %d payload bytes", url, len(inner_payload))
             async with self._session.post(
                 url,
-                headers=self.headers,
+                headers=headers,
                 cookies=self.cookies,
                 data=framed_content,
-                timeout=10,
+                timeout=15,
             ) as response:
                 response_text = await response.text()
-                _LOG.info("Atlas RPC %s status: %s, body length: %len", endpoint, response.status, len(response_text))
+                _LOG.info("Atlas RPC %s received status %s", endpoint, response.status)
 
                 if response.status in (401, 500) and retry:
                     _LOG.warning("Atlas RPC returned status %s. Refreshing session...", response.status)
@@ -56,8 +60,14 @@ class AtlasDiracController:
 
                 response.raise_for_status()
                 return response_text
-        except (ClientError, TimeoutError, OSError) as err:
-            _LOG.error("Atlas RPC command failed for %s: %s", url, err)
+        except TimeoutError:
+            _LOG.error("Atlas RPC request timed out connecting to %s", url)
+            raise
+        except ClientError as err:
+            _LOG.error("Atlas RPC aiohttp ClientError for %s: %s", url, err)
+            raise
+        except Exception as err:
+            _LOG.error("Atlas RPC unexpected error for %s (%s): %s", url, type(err).__name__, err)
             raise
 
     async def set_filter_slot(self, slot_index: int) -> bool:
