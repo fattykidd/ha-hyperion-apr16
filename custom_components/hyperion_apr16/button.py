@@ -48,7 +48,7 @@ async def async_setup_entry(
         slot_names = await device.async_get_dirac_filter_slots_list()
         for idx, slot_name in enumerate(slot_names):
             buttons.append(HyperionDiracSlotButton(coordinator, device, entry, slot_name, idx))
-    except Exception as err:
+    except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
         _LOG.warning("Failed to fetch dynamic Dirac slots for buttons: %s", err)
 
     async_add_entities(buttons)

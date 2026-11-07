@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -90,6 +91,39 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     data["dirac_filter_slots_raw"] = dirac_slots_raw
                 except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
                     _LOG.debug("Could not fetch Dirac filter slots: %s", err)
+
+            # Fetch dynamic user-defined input names from port 8080
+            input_names = {}
+            for inp_id in range(1, 9):
+                try:
+                    url = f"http://{getattr(self.device, 'host', '192.168.50.170')}:8080/api/atlas/input/name?input={inp_id}"
+                    async with self.device._session.get(url, headers={"accept": "application/json"}, timeout=1.0) as resp:
+                        if resp.status == 200:
+                            res_json = await resp.json()
+                            if name := res_json.get("name"):
+                                input_names[inp_id] = name
+                except (ClientError, TimeoutError, OSError) as err:
+                    _LOG.warning("Failed to fetch input name for input %d: %s", inp_id, err)
+                    break  # Stop querying if input ID doesn't exist
+            data["input_names"] = input_names
+
+            # Fetch and clean Dirac filter slots safely
+            if self.client:
+                try:
+                    raw_slots = await self.client.get_filter_slots()
+                    # Clean binary gRPC data into readable user slot names using regex
+                    if isinstance(raw_slots, bytes):
+                        text_data = raw_slots.decode("utf-8", errors="ignore")
+                    else:
+                        text_data = str(raw_slots)
+                    
+                    found_slots = re.findall(r'([0-9]+\s*dB\s+[a-zA-Z0-9\-\s]+|[a-zA-Z0-9\-\s]+current)', text_data)
+                    cleaned_slots = [s.strip() for s in found_slots if len(s.strip()) > 2]
+                    
+                    data["dirac_filter_slots"] = list(dict.fromkeys(cleaned_slots)) if cleaned_slots else ["Slot 0", "Slot 1"]
+                except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+                    _LOG.debug("Could not parse Dirac filter slots: %s", err)
+                    data["dirac_filter_slots"] = ["Slot 0", "Slot 1"]
 
             return data
         except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:

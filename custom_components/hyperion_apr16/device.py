@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from aiohttp import ClientError, ClientSession
@@ -88,21 +89,32 @@ class Apr16:
     # --- Dirac Methods for Port 80 Atlas Service ---
     
     async def async_get_dirac_filter_slots_list(self) -> list[str]:
-        """Fetch and parse user-defined Dirac filter slot names from the Atlas service."""
+        """Extract custom Dirac slot names from the raw gRPC response."""
         try:
-            raw_text = await self._send_atlas_request("GetDiracFilterSlots", b"")
-            import re
-            # Extract quoted strings that represent user filter names (filtering out system labels)
-            matches = re.findall(r'"([^"]+)"', raw_text)
-            slots = []
-            for m in matches:
-                # Clean and keep user-meaningful slot names
-                if len(m) > 1 and "hyperion" not in m.lower() and "active room treatment" not in m.lower():
-                    if m not in slots:
-                        slots.append(m)
-            return slots if slots else ["Slot 0", "Slot 1", "Slot 2"]
-        except Exception as err:
-            _LOG.warning("Failed to parse Dirac slot names: %s", err)
+            # Call your existing gRPC method that queries GetDiracFilterSlots
+            raw_response = await self._send_atlas_request("GetDiracFilterSlots", b"\x00")
+        
+            if not raw_response:
+                return ["Slot 0", "Slot 1", "Slot 2"]
+
+            # Decode raw bytes to string, ignoring unparseable binary characters
+            text_data = raw_response.decode("utf-8", errors="ignore")
+        
+            # Look for patterns matching your slot naming convention (e.g., "4dB current", etc.)
+            # Or extract sequences ending in "current" / containing "dB"
+            found_slots = re.findall(r'([0-9]+\s*dB\s+[a-zA-Z0-9\-\s]+|[a-zA-Z0-9\-\s]+current)', text_data)
+        
+            # Clean and deduplicate found slot names
+            cleaned_slots = [s.strip() for s in found_slots if len(s.strip()) > 2]
+        
+            # Fallback if regex doesn't catch clean matches
+            if not cleaned_slots:
+                return ["Slot 0", "Slot 1", "Slot 2"]
+            
+            return list(dict.fromkeys(cleaned_slots))  # Remove duplicates preserving order
+        
+        except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+            _LOG.error("Failed to parse Dirac slots: %s", err)
             return ["Slot 0", "Slot 1", "Slot 2"]
 
     async def async_get_dirac_filter_slots(self) -> str:
@@ -301,14 +313,23 @@ class Apr16:
         """Enable or disable 12V trigger output."""
         await self._send_request("POST", "/v1/trigger/output", {"enabled": bool(state)})
 
-    async def get_input_name(self, input_id: int) -> str:
-        """Get the friendly name for a specific input index."""
-        res = await self._send_request("GET", f"/api/atlas/input/name?input={input_id}")
-        if isinstance(res, dict):
-            return res.get(
-                "name", res.get("input", f"Input {input_id}")
-            )
-        return f"Input {input_id}"
+    async def async_get_input_names(self) -> dict[int, str]:
+        """Fetch user-defined input names from the port 8080 REST API."""
+        input_map = {}
+        # Use the client session already established on the device class
+        for input_id in range(1, 9):  # Adjust range based on your total inputs
+            url = f"http://{self.host}:8080/api/atlas/input/name?input={input_id}"
+            try:
+                async with self._session.get(url, headers={"accept": "application/json"}, timeout=2) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        name = data.get("name")
+                        if name:
+                            input_map[input_id] = name
+            except (ClientError, TimeoutError, OSError):
+                _LOG.warning("Failed to fetch input name for input %d: %s", input)
+                continue
+        return input_map
 
     async def get_input_bass(self, input_id: int | str) -> float:
         """Get bass level for a specific input (-12 to +12 dB)."""
