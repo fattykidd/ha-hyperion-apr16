@@ -106,12 +106,12 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
-        # Initialize with whatever is currently in coordinator data, or fallback
+        # Safely pull initial options if already present, otherwise use empty/placeholder
         self._attr_options = (
             coordinator.data.get("dirac_filter_slots")
             if coordinator.data
-            else None
-        ) or ["Slot 0", "Slot 1", "Slot 2"]
+            else ["Slot 0", "Slot 1", "Slot 2"]
+        )
         self._attr_native_value = None
 
     @property
@@ -125,7 +125,7 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         return self._attr_native_value
 
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator and update options."""
+        """Handle updated data from the coordinator and sync options immediately."""
         if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
             self._attr_options = self.coordinator.data["dirac_filter_slots"]
         super()._handle_coordinator_update()
