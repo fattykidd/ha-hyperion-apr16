@@ -46,17 +46,24 @@ class AtlasDiracController:
                 data=framed_content,
                 timeout=10,
             ) as response:
+                # Read response text immediately while the connection is open
+                response_text = await response.text()
+
                 if response.status in (401, 500) and retry:
-                    _LOG.warning("Atlas RPC returned status %s. Refreshing session cookie...", response.status)
+                    _LOG.warning(
+                        "Atlas RPC %s returned status %s. Body: %s. Refreshing session...",
+                        endpoint,
+                        response.status,
+                        response_text,
+                    )
                     if await self.async_refresh_session():
                         return await self._post_command(endpoint, inner_payload, retry=False)
 
                 if response.status >= 400:
-                    error_body = await response.text()
-                    _LOG.error("Atlas RPC 500 error body for %s: %s", endpoint, error_body)
+                    _LOG.error("Atlas RPC 500 error body for %s: %s", endpoint, response_text)
 
                 response.raise_for_status()
-                return await response.text()
+                return response_text
         except (ClientError, TimeoutError, OSError) as err:
             _LOG.error("Atlas RPC command failed for %s: %s", url, err)
             raise
