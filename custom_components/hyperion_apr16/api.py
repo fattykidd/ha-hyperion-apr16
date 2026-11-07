@@ -31,29 +31,28 @@ class AtlasDiracController:
             "atlas_served_asset_session": session_cookie or "",
         }
 
-    async def _post_command(self, endpoint: str, inner_payload: bytes = b"") -> str:
+    async def _post_command(self, endpoint: str, inner_payload: bytes = b"", retry: bool = True) -> str:
         url = f"{self.base_url}/{endpoint}"
-        
-        # Wrap in Connect-RPC 5-byte binary framing envelope if payload exists
-        if inner_payload:
-            framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload
-        else:
-            framed_content = b""
+        framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload
 
         try:
-            if self._session:
-                async with self._session.post(
-                    url,
-                    headers=self.headers,
-                    cookies=self.cookies,
-                    data=framed_content,
-                    timeout=10,
-                ) as response:
-                    response.raise_for_status()
-                    return await response.text()
-            else:
-                _LOG.error("No aiohttp session provided to AtlasDiracController")
+            if not self._session:
                 raise RuntimeError("Aiohttp session missing")
+
+            async with self._session.post(
+                url,
+                headers=self.headers,
+                cookies=self.cookies,
+                data=framed_content,
+                timeout=10,
+            ) as response:
+                if response.status in (401, 500) and retry:
+                    _LOG.warning("Atlas RPC returned %s. Refreshing session cookie...", response.status)
+                    if await self.async_refresh_session():
+                        return await self._post_command(endpoint, inner_payload, retry=False)
+
+                response.raise_for_status()
+                return await response.text()
         except (ClientError, TimeoutError, OSError) as err:
             _LOG.error("Atlas RPC command failed for %s: %s", url, err)
             raise
@@ -77,3 +76,24 @@ class AtlasDiracController:
         )
         res = await self._post_command("SetDiracFiltering", inner_payload)
         return res is not None
+
+    async def async_refresh_session(self) -> bool:
+      """Fetch a fresh session cookie from the device web root."""
+      root_url = f"http://{self.host}:{self.port}/"
+      try:
+          if not self._session:
+              return False
+
+          async with self._session.get(root_url, timeout=5) as response:
+              set_cookie = response.headers.get("Set-Cookie", "")
+              if "atlas_served_asset_session=" in set_cookie:
+                  for part in set_cookie.split(";"):
+                      if "atlas_served_asset_session=" in part:
+                          token = part.split("=")[1].strip()
+                          self.session_cookie = token
+                          self.cookies["atlas_served_asset_session"] = token
+                          _LOG.debug("Refreshed session cookie successfully")
+                          return True
+      except (ClientError, TimeoutError, OSError) as err:
+          _LOG.warning("Failed to refresh session cookie: %s", err)
+      return False
