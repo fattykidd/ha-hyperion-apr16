@@ -47,9 +47,13 @@ class AtlasDiracController:
                 timeout=10,
             ) as response:
                 if response.status in (401, 500) and retry:
-                    _LOG.warning("Atlas RPC returned %s. Refreshing session cookie...", response.status)
+                    _LOG.warning("Atlas RPC returned status %s. Refreshing session cookie...", response.status)
                     if await self.async_refresh_session():
                         return await self._post_command(endpoint, inner_payload, retry=False)
+
+                if response.status >= 400:
+                    error_text = await response.text()
+                    _LOG.error("Atlas RPC 500 error body for %s: %s", endpoint, error_text)
 
                 response.raise_for_status()
                 return await response.text()
@@ -57,15 +61,16 @@ class AtlasDiracController:
             _LOG.error("Atlas RPC command failed for %s: %s", url, err)
             raise
 
+    async def set_filter_slot(self, slot_index: int) -> bool:
+        """Set the active Dirac filter slot by index (e.g., 0, 1, 2)."""
+        # Protobuf field 1, varint wire type -> tag 0x08, followed by slot_index value
+        inner_payload = bytes([0x08, slot_index])
+        res = await self._post_command("SetDiracFilterSlot", inner_payload)
+        return res is not None
+
     async def get_filter_slots(self) -> str:
         """Fetch raw response containing filter slot descriptions."""
         return await self._post_command("GetDiracFilterSlots", b"")
-
-    async def set_filter_slot(self, slot_index: int) -> bool:
-        """Set the active Dirac filter slot by index (e.g., 0, 1, 2)."""
-        inner_payload = bytes([0x10, slot_index])
-        res = await self._post_command("SetDiracFilterSlot", inner_payload)
-        return res is not None
 
     async def set_dirac_filtering(self, enabled: bool) -> bool:
         """Enable or disable master Dirac filtering."""
@@ -78,22 +83,22 @@ class AtlasDiracController:
         return res is not None
 
     async def async_refresh_session(self) -> bool:
-      """Fetch a fresh session cookie from the device web root."""
-      root_url = f"http://{self.host}:{self.port}/"
-      try:
-          if not self._session:
-              return False
-
-          async with self._session.get(root_url, timeout=5) as response:
-              set_cookie = response.headers.get("Set-Cookie", "")
-              if "atlas_served_asset_session=" in set_cookie:
-                  for part in set_cookie.split(";"):
-                      if "atlas_served_asset_session=" in part:
-                          token = part.split("=")[1].strip()
-                          self.session_cookie = token
-                          self.cookies["atlas_served_asset_session"] = token
-                          _LOG.debug("Refreshed session cookie successfully")
-                          return True
-      except (ClientError, TimeoutError, OSError) as err:
-          _LOG.warning("Failed to refresh session cookie: %s", err)
-      return False
+        """Fetch a fresh session cookie from the device web root."""
+        root_url = f"http://{self.host}:{self.port}/"
+        try:
+            if not self._session:
+                return False
+                
+            async with self._session.get(root_url, timeout=5) as response:
+                set_cookie = response.headers.get("Set-Cookie", "")
+                if "atlas_served_asset_session=" in set_cookie:
+                    for part in set_cookie.split(";"):
+                        if "atlas_served_asset_session=" in part:
+                            token = part.split("=")[1].strip()
+                            self.session_cookie = token
+                            self.cookies["atlas_served_asset_session"] = token
+                            _LOG.debug("Refreshed session cookie successfully")
+                            return True
+        except (ClientError, TimeoutError, OSError) as err:
+            _LOG.warning("Failed to refresh session cookie: %s", err)
+        return False
