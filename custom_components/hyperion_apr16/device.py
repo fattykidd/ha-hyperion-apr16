@@ -211,7 +211,7 @@ class Apr16:
         dirac_slots = ""
         try:
             dirac_slots = await self.async_get_dirac_filter_slots()
-        except Exception as err:
+        except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
             _LOG.debug("Could not fetch Dirac filter slots: %s", err)
 
         return {

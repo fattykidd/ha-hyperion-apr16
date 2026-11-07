@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .config import APR16Config
-from .const import DOMAIN, CONF_SESSION_COOKIE
+from .const import CONF_SESSION_COOKIE, DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
 from .device import Apr16
 

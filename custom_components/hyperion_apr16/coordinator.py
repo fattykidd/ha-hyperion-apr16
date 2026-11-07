@@ -10,7 +10,7 @@ from aiohttp import ClientError
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, DEFAULT_PORT, ATLAS_PORT, CONF_SESSION_COOKIE
+from .const import DOMAIN
 from .helper import percent_to_db
 
 _LOG = logging.getLogger(__name__)
@@ -88,11 +88,11 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 try:
                     dirac_slots_raw = await self.client.get_filter_slots()
                     data["dirac_filter_slots_raw"] = dirac_slots_raw
-                except (Exception) as err:
+                except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
                     _LOG.debug("Could not fetch Dirac filter slots: %s", err)
 
             return data
-        except (ClientError, TimeoutError, OSError, Exception) as err:
+        except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
             raise UpdateFailed(
                 f"Error communicating with Hyperion APR-16: {err}"
             ) from err
