@@ -56,37 +56,40 @@ class Apr16:
         """Send a Connect-RPC binary protocol request to the port 80 Atlas service."""
         url = f"http://{self.host}:80/commands.v1.AtlasService/{endpoint}"
         
-        # gRPC-web framing: 1-byte compression flag (0x00) + 4-byte big-endian length
-        framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload if inner_payload else b""
-        
         headers = {
             "Accept": "*/*",
             "Connect-Protocol-Version": "1",
             "Content-Type": "application/proto",
-            "Content-Length": str(len(framed_content)),
             "Origin": f"http://{self.host}:80",
             "Referer": f"http://{self.host}:80/",
             "User-Agent": "HomeAssistant-HyperionIntegration/1.0",
         }
         
-        cookie_val = self.session_cookie or ""
+        cookie_val = self.session_cookie or "bed02d8192fde912e17a46e5b1bb0c5c"
         cookies = {
             "forceUpdate": "true",
             "atlas_served_asset_session": cookie_val,
         }
 
+        # gRPC-web framing: 1-byte flag (0x00) + 4-byte big-endian length of inner_payload
+        if inner_payload:
+            length_bytes = len(inner_payload).to_bytes(4, byteorder="big")
+            framed_content = b"\x00" + length_bytes + inner_payload
+        else:
+            framed_content = b""
+
         async with self._session.post(
             url, 
             headers=headers, 
             cookies=cookies, 
-            data=framed_content, 
+            data=framed_content,  # Must be raw bytes object
             timeout=10
         ) as response:
+            response_text = await response.text()
             if response.status >= 400:
-                err_text = await response.text()
-                _LOG.error("Atlas RPC 500 error response for %s: %s", endpoint, err_text)
+                _LOG.error("Atlas RPC error response for %s: %s", endpoint, response_text)
             response.raise_for_status()
-            return await response.text()
+            return response_text
 
     # --- Dirac Methods for Port 80 Atlas Service ---
 
