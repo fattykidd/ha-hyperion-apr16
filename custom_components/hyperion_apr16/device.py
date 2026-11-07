@@ -38,7 +38,7 @@ class Apr16:
         
         # Port 80 explicit base URL for Connect-RPC / Atlas service endpoints
         self._atlas_base_url = f"http://{self.host}:80/commands.v1.AtlasService"
-        self.session_cookie = "bed02d8192fde912e17a46e5b1bb0c5c"
+        self.session_cookie = session_cookie
 
     async def _send_request(self, method: str, endpoint: str, data: dict[str, Any] | None = None) -> Any:
         """Send an HTTP request to the APR-16 API using the shared session."""
@@ -53,37 +53,40 @@ class Apr16:
             _LOG.error("API request failed for %s: %s", url, err)
             raise
 
-    async def _send_atlas_request(self, endpoint: str, inner_payload: bytes = b"") -> str:
-        """Send a direct binary protocol request to the port 80 Atlas service."""
+    async def _send_atlas_request(self, endpoint: str, payload: dict | None = None) -> dict | str:
+        """Send a direct JSON protocol request to the port 80 Atlas Connect-RPC service."""
         url = f"http://{self.host}:80/commands.v1.AtlasService/{endpoint}"
         
         headers = {
-            "Accept": "*/*",
+            "Accept": "application/json",
             "Connect-Protocol-Version": "1",
-            "Content-Type": "application/proto",
+            "Content-Type": "application/json",
             "Origin": f"http://{self.host}:80",
             "Referer": f"http://{self.host}:80/",
             "User-Agent": "HomeAssistant-HyperionIntegration/1.0",
         }
         
-        cookie_val = self.session_cookie or "bed02d8192fde912e17a46e5b1bb0c5c"
         cookies = {
             "forceUpdate": "true",
-            "atlas_served_asset_session": cookie_val,
+            "atlas_served_asset_session": self.session_cookie,
         }
-
-        # Send the raw inner payload bytes directly without manual gRPC-web framing wrappers
+        
+        req_payload = payload if payload is not None else {}
+        
         async with self._session.post(
             url, 
             headers=headers, 
             cookies=cookies, 
-            data=inner_payload, 
+            json=req_payload, 
             timeout=10
         ) as response:
             response_text = await response.text()
             if response.status >= 400:
                 _LOG.error("Atlas RPC error response for %s: %s", endpoint, response_text)
             response.raise_for_status()
+            
+            if response.content_type == "application/json":
+                return await response.json()
             return response_text
 
     # --- Dirac Methods for Port 80 Atlas Service ---
@@ -117,9 +120,13 @@ class Apr16:
             _LOG.error("Failed to parse Dirac slots: %s", err)
             return ["Slot 0", "Slot 1", "Slot 2"]
 
-    async def async_get_dirac_filter_slots(self) -> str:
-        """Fetch raw filter slots response from the Atlas service."""
-        return await self._send_atlas_request("GetDiracFilterSlots", b"")
+    async def get_filter_slots(self) -> dict | str:
+        """Fetch Dirac filter slots via Connect-RPC JSON endpoint."""
+        try:
+            return await self._send_atlas_request("GetDiracFilterSlots", {})
+        except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+            _LOG.debug("GetDiracFilterSlots request failed: %s", err)
+            return {}
 
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
@@ -288,10 +295,11 @@ class Apr16:
         """Set mute state."""
         await self._send_request("POST", "/v1/mute", {"state": mute})
 
-    async def set_active_input(self, source: str) -> None:
+    async def set_active_input(self, input_id: int) -> None:
         """Set active input source."""
-        await self._send_request("POST", "/api/atlas/input/active", {"input": source, "inputId": 0})
-        
+        payload = {"input": int(input_id)}
+        await self._send_request("POST", "/api/atlas/input/active", payload)
+
     async def set_audio_mode(self, mode: str) -> None:
         """Set the audio processing mode."""
         await self._send_request("POST", "/v1/audiomode", {"mode": mode})
