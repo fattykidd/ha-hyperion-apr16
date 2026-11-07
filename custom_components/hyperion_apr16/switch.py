@@ -32,7 +32,7 @@ async def async_setup_entry(
         HyperionMuteSwitch(coordinator, device, entry),
         HyperionDisplayPowerSwitch(coordinator, device, entry),
         HyperionTriggerSwitch(coordinator, device, entry),
-        HyperionDiracFilteringSwitch(coordinator, device, entry),
+        HyperionDiracSwitch(coordinator, device, entry),
     ]
 
     async_add_entities(switches)
@@ -150,23 +150,32 @@ class HyperionTriggerSwitch(HyperionBaseSwitch):
         await self.coordinator.async_request_refresh()
 
 
-class HyperionDiracFilteringSwitch(HyperionBaseSwitch):
-    """Switch to toggle master Dirac filtering state."""
+class HyperionDiracSwitch(HyperionBaseSwitch):
+    """Switch to toggle Dirac filter active state."""
 
     def __init__(self, coordinator, device, entry):
-        super().__init__(coordinator, device, entry, "dirac_filtering", "Dirac Filtering")
+        super().__init__(coordinator, device, entry, "dirac_switch", "Dirac Active")
 
     @property
     def is_on(self) -> bool:
-        """Return True if Dirac filtering is active."""
-        return bool(self.coordinator.data.get("dirac_filtering_enabled", False))
+        """Return True if Dirac is active based on coordinator data."""
+        if self.coordinator.data and "dirac_active" in self.coordinator.data:
+            return bool(self.coordinator.data["dirac_active"])
+        return False
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        super()._handle_coordinator_update()
+        self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn master Dirac filtering on."""
-        await self._device.async_set_dirac_filtering(True)
-        await self.async_update()
+        """Turn the Dirac filter active state on."""
+        await self._device.async_set_dirac_active(True)
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn master Dirac filtering off."""
-        await self._device.async_set_dirac_filtering(False)
-        await self.async_update()
+        """Turn the Dirac filter active state off."""
+        await self._device.async_set_dirac_active(False)
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()

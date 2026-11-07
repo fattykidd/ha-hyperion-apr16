@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from aiohttp import ClientError
@@ -121,15 +122,21 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         return self._attr_native_value
 
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator and repopulate options."""
-        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
-            new_slots = self.coordinator.data["dirac_filter_slots"]
-            _LOGGER.warning("DEBUG: Coordinator returned dirac_filter_slots -> %r", new_slots)
-            if new_slots:
-                self._attr_options = new_slots
-        else:
-            _LOGGER.warning("DEBUG: coordinator.data missing dirac_filter_slots. Current coordinator.data: %r", self.coordinator.data)
+        """Handle updated data from the coordinator and parse slot names."""
+        if self.coordinator.data and "dirac_slots_raw" in self.coordinator.data:
+            raw_text = self.coordinator.data["dirac_slots_raw"]
             
+            # Extract quoted strings or text patterns like '4dB current', '2dB current', etc.
+            # Looking at your log, the slot names appear before 'hyperion 9 point'
+            extracted_slots = re.findall(r'([0-9a-zA-Z\s\-]+current)', raw_text)
+            
+            if extracted_slots:
+                # Deduplicate and clean up whitespace
+                cleaned = [s.strip() for s in extracted_slots if s.strip()]
+                if cleaned:
+                    self._attr_options = cleaned
+                    _LOGGER.warning("DEBUG: Successfully parsed slot options -> %r", self._attr_options)
+                    
         super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
