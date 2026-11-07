@@ -41,9 +41,16 @@ async def async_setup_entry(
     coordinator = data["coordinator"]
     device = data["device"]
 
+    # Pull the exact slot list from coordinator data, with a safe fallback
+    slot_names = (
+        coordinator.data.get("dirac_filter_slots")
+        if coordinator.data
+        else None
+    ) or ["Slot 0", "Slot 1", "Slot 2"]
+
     async_add_entities([
         HyperionAudioModeSelect(coordinator, device, entry),
-        HyperionDiracSlotSelect(coordinator, device, entry),
+        HyperionDiracSlotSelect(coordinator, device, entry, slot_names),
     ])
 
 
@@ -97,16 +104,17 @@ class HyperionAudioModeSelect(HyperionBaseSelect):
 class HyperionDiracSlotSelect(HyperionBaseSelect):
     """Representation of the Dirac Filter Slot select entity."""
 
-    def __init__(self, coordinator, device, entry) -> None:
+    def __init__(self, coordinator, device, entry, slot_names: list[str]) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
+        self._attr_options = slot_names
         self._attr_native_value = None
 
     @property
     def options(self) -> list[str]:
-        """Return the dynamic list of Dirac filter slots from the coordinator."""
-        if not self.coordinator.data:
-            return ["Slot 0", "Slot 1", "Slot 2"]
-        return self.coordinator.data.get("dirac_filter_slots", ["Slot 0", "Slot 1", "Slot 2"])
+        """Return the dynamic list of Dirac filter slots."""
+        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
+            return self.coordinator.data["dirac_filter_slots"]
+        return self._attr_options
 
     @property
     def current_option(self) -> str | None:
