@@ -120,7 +120,7 @@ class Apr16:
             _LOG.error("Failed to parse Dirac slots: %s", err)
             return ["Slot 0", "Slot 1", "Slot 2"]
 
-    async def get_filter_slots(self) -> dict | str:
+    async def get_dirac_filter_slots(self) -> dict | str:
         """Fetch Dirac filter slots via Connect-RPC JSON endpoint."""
         try:
             return await self._send_atlas_request("GetDiracFilterSlots", {})
