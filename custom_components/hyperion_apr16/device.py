@@ -273,9 +273,9 @@ class Apr16:
         """Set mute state."""
         await self._send_request("POST", "/v1/mute", {"state": mute})
 
-    async def set_active_input(self, input_id: int) -> None:
-        """Set active input source."""
-        payload = {"input": int(input_id)}
+    async def set_active_input(self, input_id: int | str) -> None:
+        """Set active input source on port 8080 using the string input ID."""
+        payload = {"input": str(input_id)}
         await self._send_request("POST", "/api/atlas/input/active", payload)
 
     async def set_audio_mode(self, mode: str) -> None:
