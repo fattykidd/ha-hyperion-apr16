@@ -53,7 +53,7 @@ class Apr16:
             raise
 
     async def _send_atlas_request(self, endpoint: str, inner_payload: bytes = b"") -> str:
-        """Send a Connect-RPC binary protocol request to the port 80 Atlas service."""
+        """Send a direct binary protocol request to the port 80 Atlas service."""
         url = f"http://{self.host}:80/commands.v1.AtlasService/{endpoint}"
         
         headers = {
@@ -71,18 +71,12 @@ class Apr16:
             "atlas_served_asset_session": cookie_val,
         }
 
-        # gRPC-web framing: 1-byte flag (0x00) + 4-byte big-endian length of inner_payload
-        if inner_payload:
-            length_bytes = len(inner_payload).to_bytes(4, byteorder="big")
-            framed_content = b"\x00" + length_bytes + inner_payload
-        else:
-            framed_content = b""
-
+        # Send the raw inner payload bytes directly without manual gRPC-web framing wrappers
         async with self._session.post(
             url, 
             headers=headers, 
             cookies=cookies, 
-            data=framed_content,  # Must be raw bytes object
+            data=inner_payload, 
             timeout=10
         ) as response:
             response_text = await response.text()
