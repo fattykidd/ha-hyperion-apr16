@@ -94,49 +94,20 @@ class HyperionAudioModeSelect(HyperionBaseSelect):
             _LOG.error("Failed to set audio mode to %s: %s", option, err)
 
 
-class HyperionDiracSlotSelect(CoordinatorEntity, SelectEntity):
+class HyperionDiracSlotSelect(HyperionBaseSelect):
     """Representation of the Dirac Filter Slot select entity."""
 
     def __init__(self, coordinator, device, entry) -> None:
-        """Initialize the select entity."""
-        super().__init__(coordinator)
-        self._device = device
-        self._attr_name = "Dirac Filter Slot"
-        self._attr_unique_id = f"{entry.entry_id}_dirac_filter_slot"
-        self._attr_icon = "mdi:equalizer"
-
-    @property
-    def options(self) -> list[str]:
-        """Return the list of available Dirac filter slots from coordinator data."""
-        if not self.coordinator.data:
-            return []
-        return self.coordinator.data.get("dirac_filter_slots", [])
-
-    @property
-    def current_option(self) -> str | None:
-        """Return the currently selected Dirac filter slot."""
-        slots = self.options
-        if not slots:
-            return None
-
-        # Check local optimistic tracking or coordinator state
-        current = self.coordinator.data.get("selected_dirac_slot")
-        if current in slots:
-            return current
-
-        # Default to the first valid slot so it never initializes as unknown
-        return slots[0]
+        super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
+        self._attr_options = ["Slot 0", "Slot 1", "Slot 2"]
 
     async def async_select_option(self, option: str) -> None:
-        """Change the active slot index by matching the selected name."""
-        slots = self.options
+        """Change the active slot index by matching the selected user-defined name."""
+        slots = self._attr_options
         try:
             slot_index = slots.index(option)
         except ValueError:
             slot_index = 0
             
         await self._device.async_set_dirac_filter_slot(slot_index)
-        
-        # Store locally and force immediate UI update
-        self.coordinator.data["selected_dirac_slot"] = option
-        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
