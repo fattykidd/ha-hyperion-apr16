@@ -106,18 +106,17 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
-        # Safely pull initial options if already present, otherwise use empty/placeholder
-        self._attr_options = (
-            coordinator.data.get("dirac_filter_slots")
-            if coordinator.data
-            else ["Slot 0", "Slot 1", "Slot 2"]
-        )
         self._attr_native_value = None
 
     @property
     def options(self) -> list[str]:
-        """Return the dynamic list of Dirac filter slots."""
-        return self._attr_options
+        """Return dynamic slot names only when coordinator data is fully available."""
+        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
+            slots = self.coordinator.data["dirac_filter_slots"]
+            if slots:
+                return slots
+                
+        return []
 
     @property
     def current_option(self) -> str | None:
@@ -125,10 +124,8 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         return self._attr_native_value
 
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator and sync options immediately."""
-        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
-            self._attr_options = self.coordinator.data["dirac_filter_slots"]
-        super()._handle_coordinator_update()
+        """Handle updated data from the coordinator and refresh state."""
+        self.async_write_ha_state()
 
     async def async_select_option(self, option: str) -> None:
         """Change the active slot index by matching the selected custom name."""
