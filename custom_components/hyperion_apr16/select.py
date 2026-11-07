@@ -103,19 +103,24 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     @property
     def options(self) -> list[str]:
-        """Return the list of available Dirac filter slot options."""
-        return self.coordinator.data.get("dirac_slots", [])
+        """Return a set of available Dirac filter slots."""
+        if not self.coordinator.data:
+            return []
+        return self.coordinator.data.get("dirac_filter_slots", [])
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently selected Dirac filter slot."""
+        """Return the selected Dirac filter slot."""
         slots = self.options
         if not slots:
             return None
         
-        # Ensure index is within bounds, defaulting safely to the first slot
-        if 0 <= self._attr_native_value < len(slots):
+        # If native value is stored as an index or a string name, handle both safely
+        if isinstance(self._attr_native_value, (int, float)) and 0 <= int(self._attr_native_value) < len(slots):
             return slots[int(self._attr_native_value)]
+        if self._attr_native_value in slots:
+            return self._attr_native_value
+            
         return slots[0]
 
     async def async_select_option(self, option: str) -> None:
