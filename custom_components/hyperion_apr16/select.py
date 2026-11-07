@@ -122,20 +122,18 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
         return self._attr_native_value
 
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator and parse slot names."""
+        """Handle updated data from the coordinator and parse slot names by delimiters."""
         if self.coordinator.data and "dirac_slots_raw" in self.coordinator.data:
             raw_text = self.coordinator.data["dirac_slots_raw"]
             
-            # Extract quoted strings or text patterns like '4dB current', '2dB current', etc.
-            # Looking at your log, the slot names appear before 'hyperion 9 point'
-            extracted_slots = re.findall(r'([0-9a-zA-Z\s\-]+current)', raw_text)
+            # Extract everything strictly bounded between \x0b and \x1a
+            extracted_slots = re.findall(r'\x0b([^\x1a]+)\x1a', raw_text)
             
             if extracted_slots:
-                # Deduplicate and clean up whitespace
                 cleaned = [s.strip() for s in extracted_slots if s.strip()]
                 if cleaned:
                     self._attr_options = cleaned
-                    _LOGGER.warning("DEBUG: Successfully parsed slot options -> %r", self._attr_options)
+                    _LOGGER.warning("DEBUG: Successfully parsed delimiter options -> %r", self._attr_options)
                     
         super()._handle_coordinator_update()
 
