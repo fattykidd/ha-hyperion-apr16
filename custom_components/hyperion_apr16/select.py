@@ -99,27 +99,26 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
-        # Remove self._attr_options so the dynamic options property is used instead
 
     @property
     def options(self) -> list[str]:
-        """Return a set of available Dirac filter slots."""
+        """Return the list of available Dirac filter slots from the coordinator."""
         if not self.coordinator.data:
             return []
         return self.coordinator.data.get("dirac_filter_slots", [])
 
     @property
     def current_option(self) -> str | None:
-        """Return the selected Dirac filter slot."""
+        """Return the currently selected Dirac filter slot."""
         slots = self.options
         if not slots:
             return None
-        
-        if isinstance(self._attr_native_value, (int, float)) and 0 <= int(self._attr_native_value) < len(slots):
-            return slots[int(self._attr_native_value)]
-        if self._attr_native_value in slots:
-            return self._attr_native_value
-            
+
+        # Fall back to locally tracked selection or default to the first slot
+        current = self.coordinator.data.get("selected_dirac_slot")
+        if current in slots:
+            return current
+
         return slots[0]
 
     async def async_select_option(self, option: str) -> None:
@@ -131,4 +130,7 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
             slot_index = 0
             
         await self._device.async_set_dirac_filter_slot(slot_index)
-        await self.coordinator.async_request_refresh()
+        
+        # Optimistically store the selection and update UI state
+        self.coordinator.data["selected_dirac_slot"] = option
+        self.async_write_ha_state()
