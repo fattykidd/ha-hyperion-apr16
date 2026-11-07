@@ -99,16 +99,17 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
+        # Match the slot naming structure used across the custom integration
         self._attr_options = ["Slot 0", "Slot 1", "Slot 2"]
         self._attr_native_value = None
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently selected Dirac filter slot, preserving local state."""
+        """Return the currently selected slot, preserving local state."""
         return self._attr_native_value
 
     async def async_select_option(self, option: str) -> None:
-        """Change the active slot index by matching the selected user-defined name."""
+        """Change the active slot index by matching the selected name."""
         slots = self._attr_options
         try:
             slot_index = slots.index(option)
@@ -117,7 +118,7 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
             
         await self._device.async_set_dirac_filter_slot(slot_index)
         
-        # Cache the selection locally so it doesn't revert to unknown on refresh
+        # Lock in the state so it doesn't revert to unknown
         self._attr_native_value = option
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
