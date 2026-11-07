@@ -107,7 +107,7 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     break  # Stop querying if input ID doesn't exist
             data["input_names"] = input_names
 
-            # Fetch and clean Dirac filter slots safely
+           # Fetch and clean Dirac filter slots safely
             if self.client:
                 try:
                     raw_slots = await self.client.get_filter_slots()
@@ -116,23 +116,23 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     else:
                         text_data = str(raw_slots)
                     
-                    # Store raw debug data if needed
-                    data["dirac_filter_slots_raw"] = text_data
+                    # Store raw debug data for tracking
+                    data["dirac_slots_raw"] = text_data
 
-                    # Extract clean slot names (e.g. "2dB current", "4dB current") before notes
-                    raw_matches = re.findall(r'([0-9a-zA-Z\s]+current)', text_data)
+                    # Extract slot names strictly bounded between \x0b and \x1a delimiters
+                    extracted_slots = re.findall(r'\x0b([^\x1a]+)\x1a', text_data)
                     
                     cleaned_slots = []
-                    for match in raw_matches:
-                        # Strip control characters (like \x0b) and trailing whitespace
-                        cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', match).strip()
+                    for s in extracted_slots:
+                        # Clean control characters and whitespace
+                        cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s).strip()
                         if cleaned and cleaned not in cleaned_slots:
                             cleaned_slots.append(cleaned)
                     
-                    data["dirac_filter_slots"] = cleaned_slots if cleaned_slots else ["Slot 0", "Slot 1"]
+                    data["dirac_filter_slots"] = cleaned_slots if cleaned_slots else ["Slot 0", "Slot 1", "Slot 2"]
                 except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
                     _LOG.debug("Could not parse Dirac filter slots: %s", err)
-                    data["dirac_filter_slots"] = ["Slot 0", "Slot 1"]
+                    data["dirac_filter_slots"] = ["Slot 0", "Slot 1", "Slot 2"]
 
             return data
         except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
