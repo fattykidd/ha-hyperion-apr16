@@ -10,8 +10,8 @@ from aiohttp import ClientError
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN
-from .helper import percent_to_db  # <--- 1. Import your volume helper
+from .const import DOMAIN, DEFAULT_PORT, ATLAS_PORT, CONF_SESSION_COOKIE
+from .helper import percent_to_db
 
 _LOG = logging.getLogger(__name__)
 
@@ -28,6 +28,8 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=5),
         )
         self.device = device
+        # Expose the dirac client reference if entities need direct access for commands
+        self.client = getattr(device, "dirac_client", None)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the Hyperion APR-16 processor."""
@@ -78,9 +80,17 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 mac_resp = await self.device.async_get_macaddress()
                 data["mac_address"] = mac_resp
             except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
-                _LOG.warning("Could not fetch MAC address (Error: %s - %s)", type(err).__name__, err)
+                _LOG.warning("Could not fetch MAC address (Error: %s %s)", type(err).__name__, err)
                 data["mac_address"] = "00:00:00:00:00:00"
-                
+
+            # Fetch Dirac filter slots & status via port 80 Atlas client safely
+            if self.client:
+                try:
+                    dirac_slots_raw = await self.client.get_filter_slots()
+                    data["dirac_filter_slots_raw"] = dirac_slots_raw
+                except (Exception) as err:
+                    _LOG.debug("Could not fetch Dirac filter slots: %s", err)
+
             return data
         except (ClientError, TimeoutError, OSError, Exception) as err:
             raise UpdateFailed(

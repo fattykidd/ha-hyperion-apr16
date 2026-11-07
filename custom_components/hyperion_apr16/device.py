@@ -22,6 +22,7 @@ class Apr16:
         port: int = 8080,
         session: ClientSession | None = None,
         device_config: APR16Config | None = None,
+        session_cookie: str | None = None,
     ) -> None:
         """Initialize the client supporting both direct args and config dataclass."""
         if device_config is not None:
@@ -33,6 +34,10 @@ class Apr16:
 
         self._session = session
         self._base_url = f"http://{self.host}:{self.port}"
+        
+        # Port 80 explicit base URL for Connect-RPC / Atlas service endpoints
+        self._atlas_base_url = f"http://{self.host}:80/commands.v1.AtlasService"
+        self.session_cookie = session_cookie
 
     async def _send_request(self, method: str, endpoint: str, data: dict[str, Any] | None = None) -> Any:
         """Send an HTTP request to the APR-16 API using the shared session."""
@@ -47,6 +52,63 @@ class Apr16:
             _LOG.error("API request failed for %s: %s", url, err)
             raise
 
+    async def _send_atlas_request(self, endpoint: str, inner_payload: bytes = b"") -> str:
+        """Send a Connect-RPC binary protocol request to the port 80 Atlas service."""
+        url = f"{self._atlas_base_url}/{endpoint}"
+        
+        headers = {
+            "Accept": "*/*",
+            "Connect-Protocol-Version": "1",
+            "Content-Type": "application/proto",
+            "Origin": f"http://{self.host}:80",
+            "Referer": f"http://{self.host}:80/",
+            "User-Agent": "HomeAssistant-HyperionIntegration/1.0",
+        }
+        
+        cookies = {
+            "forceUpdate": "true",
+            "atlas_served_asset_session": self.session_cookie or "",
+        }
+
+        # Wrap in Connect-RPC 5-byte envelope if payload exists
+        if inner_payload:
+            framed_content = b"\x00" + len(inner_payload).to_bytes(4, "big") + inner_payload
+        else:
+            framed_content = b""
+
+        try:
+            async with self._session.post(
+                url, 
+                headers=headers, 
+                cookies=cookies, 
+                data=framed_content, 
+                timeout=10
+            ) as response:
+                response.raise_for_status()
+                return await response.text()
+        except (ClientError, TimeoutError, OSError) as err:
+            _LOG.error("Atlas RPC request failed for %s: %s", url, err)
+            raise
+
+    # --- Dirac Methods for Port 80 Atlas Service ---
+
+    async def async_get_dirac_filter_slots(self) -> str:
+        """Fetch raw filter slots response from the Atlas service."""
+        return await self._send_atlas_request("GetDiracFilterSlots", b"")
+
+    async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
+        """Switch active Dirac filter slot by index (0, 1, 2)."""
+        inner_payload = bytes([0x10, slot_index])
+        res = await self._send_atlas_request("SetDiracFilterSlot", inner_payload)
+        return res is not None
+
+    async def async_set_dirac_filtering(self, enabled: bool) -> bool:
+        """Enable or disable master Dirac filtering."""
+        inner_payload = bytes([0x08, 0x01, 0x10, 0x01, 0x18, 0x01]) if enabled else bytes([0x08, 0x00, 0x10, 0x01, 0x18, 0x01])
+        res = await self._send_atlas_request("SetDiracFiltering", inner_payload)
+        return res is not None
+
+    # --- Existing Apr16 Methods Below ---
     async def async_connect(self) -> bool:
         """Test connection and verify reachability of the APR-16 processor."""
         try:
@@ -88,7 +150,6 @@ class Apr16:
         except (ValueError, TypeError):
             _LOG.warning("Failed to parse audio detail value: %s", audio_detail_res)
 
-        # Parse responses safely
         power = False
         if isinstance(power_res, dict):
             val = power_res.get("state", False)
@@ -98,10 +159,7 @@ class Apr16:
         volume_db = -127.5
         
         if isinstance(vol_res, dict):
-            # 1. Absolute scale (0-100 percentage)
             volume_percent = float(vol_res.get("level", 0.0))
-            
-            # 2. Relative scale (Mapped dB attenuation using our helper)
             volume_db = round(percent_to_db(volume_percent), 1)
 
         mute = False
@@ -114,7 +172,6 @@ class Apr16:
             active_input = input_res.get("input", input_res.get("name", "HDMI 1"))
             input_id = input_res.get("inputId", 1)
 
-        # Fetch bass and treble using the extracted numeric input ID
         bass_level = await self.get_input_bass(input_id)
         treble_level = await self.get_input_treble(input_id)
 
@@ -150,6 +207,13 @@ class Apr16:
         elif isinstance(video_detail_res, str):
             video_detail = video_detail_res
 
+        # Fetch Dirac slots safely during status updates
+        dirac_slots = ""
+        try:
+            dirac_slots = await self.async_get_dirac_filter_slots()
+        except Exception as err:
+            _LOG.debug("Could not fetch Dirac filter slots: %s", err)
+
         return {
             "power": power,
             "volume": volume_percent,
@@ -166,6 +230,7 @@ class Apr16:
             "audio_detail": audio_detail,
             "video_detail": video_detail,
             "temperature": temperature,
+            "dirac_slots_raw": dirac_slots,
         }
 
     async def power_on(self) -> None:
@@ -269,7 +334,6 @@ class Apr16:
 
     async def set_input_channel_gain(self, input_id: int, gain_db: float) -> None:
         """Set input gain/trim for a specific input via Atlas API."""
-        # Ensure gain value formatting matches your API expectations
         url = f"{self._base_url}/api/atlas/input/{input_id}/gain/{int(gain_db)}"
         async with self._session.post(url, json={"inputId": 0}) as response:
             response.raise_for_status()
@@ -315,4 +379,3 @@ class Apr16:
             resp.raise_for_status()
             data = await resp.json()
             return data.get("mac", "00:00:00:00:00:00")
-        

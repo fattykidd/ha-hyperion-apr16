@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .config import APR16Config
-from .const import DOMAIN
+from .const import DOMAIN, CONF_SESSION_COOKIE
 from .coordinator import HyperionDataUpdateCoordinator
 from .device import Apr16
 
@@ -28,29 +28,26 @@ PLATFORMS: list[Platform] = [
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AudioControl Hyperion APR-16 from a config entry."""
-    # Support both "address" (used in tests) and "host" (used in config flow)
     host = entry.data.get("address", entry.data.get("host"))
     port = entry.data.get("port", 8080)
     name = entry.data.get("name", "AudioControl Hyperion APR-16")
+    session_cookie = entry.data.get(CONF_SESSION_COOKIE)
 
     device_config = APR16Config(
-        identifier=entry.entry_id,  # Provide the required unique identifier
+        identifier=entry.entry_id,
         name=name,
         address=host,
         port=port,
     )
 
-    # Get Home Assistant's shared aiohttp client session
     session = async_get_clientsession(hass)
     
-    # Initialize the device client with the shared session
-    device = Apr16(device_config=device_config, session=session)
+    # Initialize the device client, passing the session_cookie for port 80 Atlas endpoints
+    device = Apr16(device_config=device_config, session=session, session_cookie=session_cookie)
 
-    # Initialize the data update coordinator
     coordinator = HyperionDataUpdateCoordinator(hass, device=device)
     await coordinator.async_config_entry_first_refresh()
 
-    # Store device and coordinator dictionary in hass.data as expected by platforms
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "device": device,
