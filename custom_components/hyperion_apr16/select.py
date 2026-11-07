@@ -104,17 +104,16 @@ class HyperionAudioModeSelect(HyperionBaseSelect):
 class HyperionDiracSlotSelect(HyperionBaseSelect):
     """Representation of the Dirac Filter Slot select entity."""
 
-    def __init__(self, coordinator, device, entry, slot_names: list[str]) -> None:
+    def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
-        self._attr_options = slot_names
         self._attr_native_value = None
 
     @property
     def options(self) -> list[str]:
-        """Return the dynamic list of Dirac filter slots."""
+        """Return the dynamic list of Dirac filter slots directly from coordinator data."""
         if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
             return self.coordinator.data["dirac_filter_slots"]
-        return self._attr_options
+        return ["Slot 0", "Slot 1"]
 
     @property
     def current_option(self) -> str | None:
@@ -131,7 +130,6 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
             
         await self._device.async_set_dirac_filter_slot(slot_index)
         
-        # Lock in the state so it doesn't revert to unknown
         self._attr_native_value = option
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

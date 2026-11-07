@@ -94,7 +94,7 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Fetch dynamic user-defined input names from port 8080
             input_names = {}
-            for inp_id in range(1, 9):
+            for inp_id in range(1, 17): # Query inputs 1-16 for names
                 try:
                     url = f"http://{getattr(self.device, 'host', '192.168.50.170')}:8080/api/atlas/input/name?input={inp_id}"
                     async with self.device._session.get(url, headers={"accept": "application/json"}, timeout=1.0) as resp:
