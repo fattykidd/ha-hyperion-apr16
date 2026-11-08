@@ -198,6 +198,9 @@ class HyperionSensor(HyperionBaseSensor):
             return None
         return data.get(self._key)
 
+import re
+
+
 class HyperionActiveDiracSlotSensor(CoordinatorEntity, SensorEntity):
     """Sensor tracking the active Dirac filter slot and ART state."""
 
@@ -221,13 +224,26 @@ class HyperionActiveDiracSlotSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> str | None:
-        """Return the name of the currently active slot."""
+        """Return the user-defined name of the currently active slot."""
         if not self.coordinator.data:
             return None
 
-        slot_idx = self.coordinator.data.get("dirac_slot", 0)
-        slots = self.coordinator.data.get("dirac_filter_slots", ["Slot 1", "Slot 2", "Slot 3"])
+        slot_idx = self.coordinator.data.get("active_slot", 0)
         
+        # Default fallback slot names
+        slots = ["Slot 1", "Slot 2", "Slot 3"]
+        
+        # Parse custom slot names from raw payload identically to the select entity
+        if "dirac_slots_raw" in self.coordinator.data:
+            raw_text = self.coordinator.data["dirac_slots_raw"]
+            extracted_slots = re.findall(r'\x0b([^\x1a]+)\x1a', raw_text)
+            if extracted_slots:
+                cleaned = [s.strip() for s in extracted_slots if s.strip()]
+                if cleaned:
+                    slots = cleaned
+        elif "dirac_filter_slots" in self.coordinator.data:
+            slots = self.coordinator.data.get("dirac_filter_slots", slots)
+
         if isinstance(slot_idx, int) and 0 <= slot_idx < len(slots):
             return slots[slot_idx]
         return f"Slot {slot_idx + 1}"
@@ -239,7 +255,7 @@ class HyperionActiveDiracSlotSensor(CoordinatorEntity, SensorEntity):
             return {}
             
         return {
-            "slot_index": self.coordinator.data.get("dirac_slot"),
+            "slot_index": self.coordinator.data.get("active_slot"),
             "dirac_active": self.coordinator.data.get("dirac_active"),
             "available_slots": self.coordinator.data.get("dirac_filter_slots", []),
         }

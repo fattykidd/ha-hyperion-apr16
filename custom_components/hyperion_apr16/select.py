@@ -107,19 +107,19 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
     """Representation of the Dirac Filter Slot select entity."""
 
     def __init__(self, coordinator, device, entry) -> None:
-        super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
+        super().__init__(coordinator, device, entry, "active_slot", "Dirac Filter Slot")
         self._attr_options = ["Slot 1", "Slot 2", "Slot 3"]
-        self._attr_native_value = None
-
-    @property
-    def options(self) -> list[str]:
-        """Return the current options list."""
-        return self._attr_options
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently selected slot, preserving local state."""
-        return self._attr_native_value
+        """Return the currently selected slot by mapping the active_slot index to options."""
+        if not self.coordinator.data:
+            return None
+
+        slot_idx = self.coordinator.data.get("active_slot", 0)
+        if isinstance(slot_idx, int) and 0 <= slot_idx < len(self._attr_options):
+            return self._attr_options[slot_idx]
+        return None
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator and parse slot names by delimiters."""
@@ -133,7 +133,6 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
                 cleaned = [s.strip() for s in extracted_slots if s.strip()]
                 if cleaned:
                     self._attr_options = cleaned
-            #        _LOGGER.warning("DEBUG: Successfully parsed delimiter options -> %r", self._attr_options)
                     
         super()._handle_coordinator_update()
 
@@ -147,6 +146,5 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
             
         await self._device.async_set_dirac_filter_slot(slot_index)
         
-        self._attr_native_value = option
-        self.async_write_ha_state()
+        # Request an immediate refresh so the coordinator fetches the new live active_slot
         await self.coordinator.async_request_refresh()

@@ -116,6 +116,39 @@ class Apr16:
         except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
             _LOG.debug("Failed to get Dirac filter slots list: %s", err)
             return []
+    
+    async def async_get_dirac_active_slot(self) -> int:
+        """Query the hardware live for the active Dirac slot index."""
+
+        url = f"http://{self.host}/commands.v1.AtlasService/GetDiracActiveSlot"
+        headers = {
+            "Content-Type": "application/proto",
+            "connect-protocol-version": "1",
+        }
+        
+        # Use self._session if available, otherwise fallback to self.session
+        session = getattr(self, "_session", getattr(self, "session", None))
+        if not session:
+            _LOG.debug("GetDiracActiveSlot failed: No active aiohttp session found on device client")
+            return 0
+
+        try:
+            async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
+                body = await response.read()
+                _LOG.debug(
+                    "ISOLATED GetDiracActiveSlot -> status: %s | body: %r",
+                    response.status,
+                    body,
+                )
+                if response.status == 200:
+                    if not body:
+                        return 0
+                    if len(body) >= 2 and body[0] == 0x08:
+                        return body[1]
+        except (TimeoutError, ClientError, OSError, KeyError, ValueError) as err:
+            _LOG.debug("ISOLATED GetDiracActiveSlot failed: %s", err)
+            
+        return 0
 
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""

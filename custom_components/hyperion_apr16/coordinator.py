@@ -39,13 +39,19 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Fetch base status dict directly from Apr16 client in device.py
             data = await self.device.async_get_status()
 
+            # Populate our dedicated active_slot variable live from the endpoint
+            if hasattr(self.device, "async_get_dirac_active_slot"):
+                data["active_slot"] = await self.device.async_get_dirac_active_slot()
+            else:
+                data["active_slot"] = 0
+            
             # --- Raw async_get_status Inspection Logger ---
-            _LOG.warning(
+            _LOG.debug(
                 "RAW async_get_status Payload -> keys: %s | full_data: %r",
                 list(data.keys()) if isinstance(data, dict) else type(data),
                 data,
             )
-            
+
             # Attach device property metadata
             data["host_ip"] = getattr(self.device, "host", None)
 
@@ -133,7 +139,6 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
                     _LOG.debug("Could not parse Dirac filter slots: %s", err)
                     data["dirac_filter_slots"] = ["Slot 0", "Slot 1", "Slot 2"]
-
 
             return data
 
