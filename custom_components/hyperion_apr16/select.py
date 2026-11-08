@@ -103,16 +103,18 @@ class HyperionDiracSlotSelect(HyperionBaseSelect, RestoreEntity):
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
         self._attr_options = ["Slot 1", "Slot 2", "Slot 3"]
-        self._attr_native_value = None
+        self._restored_option: str | None = None
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass to restore last state."""
         await super().async_added_to_hass()
         if (
             (last_state := await self.async_get_last_state()) is not None
-            and last_state.state in self.options
+            and last_state.state
         ):
-            self._attr_native_value = last_state.state
+            if last_state.state not in self._attr_options:
+                self._attr_options.append(last_state.state)
+            self._restored_option = last_state.state
 
     @property
     def options(self) -> list[str]:
@@ -121,13 +123,14 @@ class HyperionDiracSlotSelect(HyperionBaseSelect, RestoreEntity):
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently selected slot, falling back to restored state if needed."""
+        """Return the currently selected slot from coordinator data, falling back to restored state."""
         if self.coordinator.data and "dirac_slot" in self.coordinator.data:
             slot_idx = self.coordinator.data.get("dirac_slot")
             current_options = self.options
             if isinstance(slot_idx, int) and 0 <= slot_idx < len(current_options):
                 return current_options[slot_idx]
-        return self._attr_native_value
+        # Fall back to our safely cached restored option until the coordinator updates
+        return self._restored_option
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator and parse slot names by delimiters."""
@@ -153,8 +156,8 @@ class HyperionDiracSlotSelect(HyperionBaseSelect, RestoreEntity):
         except ValueError:
             slot_index = 0
             
-        await self._device.async_set_dirac_filter_slot(slot_index)
+        # Update our cache immediately so it stays consistent
+        self._restored_option = option
         
-        self._attr_native_value = option
-        self.async_write_ha_state()
+        await self._device.async_set_dirac_filter_slot(slot_index)
         await self.coordinator.async_request_refresh()
