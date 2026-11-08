@@ -15,6 +15,7 @@ from .const import DOMAIN
 from .helper import percent_to_db
 
 _LOG = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 
 class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -133,6 +134,15 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
                     _LOG.debug("Could not parse Dirac filter slots: %s", err)
                     data["dirac_filter_slots"] = ["Slot 0", "Slot 1", "Slot 2"]
+                 
+                 # --- Polling Inspection Logger ---
+            _LOGGER.info(
+                "Hyperion APR-16 Polled Payload -> keys: %s | dirac_slot: %r | dirac_active: %r | dirac_slots_raw: %r",
+                list(data.keys()) if isinstance(data, dict) else type(data),
+                data.get("dirac_slot"),
+                data.get("dirac_active"),
+                data.get("dirac_slots_raw"),
+            )   
 
             return data
         except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:

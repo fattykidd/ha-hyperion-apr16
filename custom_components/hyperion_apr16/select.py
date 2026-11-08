@@ -17,7 +17,7 @@ from .const import DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
 
 _LOG = logging.getLogger(__name__)
-_LOGGER = logging.getLogger(__name__)
+#_LOGGER = logging.getLogger(__name__)
 
 # Map clean UI display names to the exact backend API strings
 AUDIO_MODE_MAPPING = {
@@ -133,7 +133,7 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
                 cleaned = [s.strip() for s in extracted_slots if s.strip()]
                 if cleaned:
                     self._attr_options = cleaned
-                    _LOGGER.warning("DEBUG: Successfully parsed delimiter options -> %r", self._attr_options)
+            #        _LOGGER.warning("DEBUG: Successfully parsed delimiter options -> %r", self._attr_options)
                     
         super()._handle_coordinator_update()
 
