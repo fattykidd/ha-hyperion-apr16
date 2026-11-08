@@ -45,9 +45,14 @@ async def async_setup_entry(
 
     # Fetch custom slot names dynamically on setup for stateless slot buttons
     try:
-        slot_names = await device.async_get_dirac_filter_slots_list()
+        slot_names = coordinator.data.get("dirac_filter_slots", [])
+        if not slot_names:
+            slot_names = await device.async_get_dirac_filter_slots_list()
+
         for idx, slot_name in enumerate(slot_names):
-            buttons.append(HyperionDiracSlotButton(coordinator, device, entry, slot_name, idx))
+            # Strict safety guard: never create a button for status log strings
+            if slot_name and "retrieved" not in slot_name.lower():
+                buttons.append(HyperionDiracSlotButton(coordinator, device, entry, slot_name, idx))
     except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
         _LOG.warning("Failed to fetch dynamic Dirac slots for buttons: %s", err)
 
