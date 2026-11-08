@@ -85,17 +85,9 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOG.warning("Could not fetch MAC address (Error: %s %s)", type(err).__name__, err)
                 data["mac_address"] = "00:00:00:00:00:00"
 
-            # Fetch Dirac filter slots & status via port 80 Atlas client safely
-            if self.client:
-                try:
-                    dirac_slots_raw = await self.client.get_filter_slots()
-                    data["dirac_filter_slots_raw"] = dirac_slots_raw
-                except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
-                    _LOG.debug("Could not fetch Dirac filter slots: %s", err)
-
             # Fetch dynamic user-defined input names from port 8080
             input_names = {}
-            for inp_id in range(1, 17): # Query inputs 1-16 for names
+            for inp_id in range(1, 17):  # Query inputs 1-16 for names
                 try:
                     url = f"http://{getattr(self.device, 'host', '192.168.50.170')}:8080/api/atlas/input/name?input={inp_id}"
                     async with self.device._session.get(url, headers={"accept": "application/json"}, timeout=1.0) as resp:
@@ -108,7 +100,7 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     break  # Stop querying if input ID doesn't exist
             data["input_names"] = input_names
 
-           # Fetch and clean Dirac filter slots safely
+            # Fetch and clean Dirac filter slots & status safely (consolidated)
             if self.client:
                 try:
                     raw_slots = await self.client.get_filter_slots()
@@ -119,13 +111,13 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     
                     # Store raw debug data for tracking
                     data["dirac_slots_raw"] = text_data
+                    data["dirac_filter_slots_raw"] = text_data
 
                     # Extract slot names strictly bounded between \x0b and \x1a delimiters
                     extracted_slots = re.findall(r'\x0b([^\x1a]+)\x1a', text_data)
                     
                     cleaned_slots = []
                     for s in extracted_slots:
-                        # Clean control characters and whitespace
                         cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s).strip()
                         if cleaned and cleaned not in cleaned_slots:
                             cleaned_slots.append(cleaned)
@@ -135,24 +127,17 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOG.debug("Could not parse Dirac filter slots: %s", err)
                     data["dirac_filter_slots"] = ["Slot 0", "Slot 1", "Slot 2"]
 
-                try:
-                    # Single fetch call to prevent overwriting
-                    data = await self._device.async_get_status()
+            # Unified Polling Inspection Logger (using WARNING so it outputs immediately without debug flags)
+            _LOG.warning(
+                "Hyperion APR-16 Polled Payload -> keys: %s | dirac_slot: %r | dirac_active: %r | dirac_filter_slots: %r",
+                list(data.keys()) if isinstance(data, dict) else type(data),
+                data.get("dirac_slot"),
+                data.get("dirac_active"),
+                data.get("dirac_filter_slots"),
+            )
 
-                    # Clean polling inspection logger
-                    _LOGGER.info(
-                        "Hyperion APR-16 Polled Payload -> keys: %s | dirac_slot: %r | dirac_active: %r | dirac_slots_raw: %r",
-                        list(data.keys()) if isinstance(data, dict) else type(data),
-                        data.get("dirac_slot"),
-                        data.get("dirac_active"),
-                        data.get("dirac_slots_raw"),
-                    )
-
-                    return data
-
-                except Exception as err:
-                    raise UpdateFailed(f"Error communicating with Hyperion APR-16: {err}") from err
             return data
+
         except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
             raise UpdateFailed(
                 f"Error communicating with Hyperion APR-16: {err}"
