@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from custom_components.hyperion_apr16 import device
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -16,6 +15,8 @@ from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from custom_components.hyperion_apr16 import device
 
 from .const import DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
