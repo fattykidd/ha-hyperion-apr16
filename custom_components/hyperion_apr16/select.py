@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from aiohttp import ClientError
@@ -42,13 +43,6 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
     device = data["device"]
-
-    # Pull the exact slot list from coordinator data, with a safe fallback
-    (
-        coordinator.data.get("dirac_filter_slots")
-        if coordinator.data
-        else None
-    ) or ["Slot 0", "Slot 1", "Slot 2"]
 
     async_add_entities([
         HyperionAudioModeSelect(coordinator, device, entry),
@@ -114,23 +108,20 @@ class HyperionDiracSlotSelect(HyperionBaseSelect, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass to restore last state."""
         await super().async_added_to_hass()
-        if (last_state := await self.async_get_last_state()) is not None:
-            if last_state.state and last_state.state not in self._attr_options:
-                self._attr_options.append(last_state.state)
+        if (
+            (last_state := await self.async_get_last_state()) is not None
+            and last_state.state in self.options
+        ):
             self._attr_native_value = last_state.state
 
     @property
     def options(self) -> list[str]:
-        """Return current options, prioritizing coordinator data if loaded."""
-        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
-            coordinator_slots = self.coordinator.data["dirac_filter_slots"]
-            if coordinator_slots:
-                return coordinator_slots
+        """Return the current options list."""
         return self._attr_options
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently selected slot."""
+        """Return the currently selected slot, falling back to restored state if needed."""
         if self.coordinator.data and "dirac_slot" in self.coordinator.data:
             slot_idx = self.coordinator.data.get("dirac_slot")
             current_options = self.options
@@ -139,22 +130,31 @@ class HyperionDiracSlotSelect(HyperionBaseSelect, RestoreEntity):
         return self._attr_native_value
 
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        if self.coordinator.data and "dirac_filter_slots" in self.coordinator.data:
-            new_slots = self.coordinator.data["dirac_filter_slots"]
-            if new_slots:
-                self._attr_options = new_slots
+        """Handle updated data from the coordinator and parse slot names by delimiters."""
+        if self.coordinator.data and "dirac_slots_raw" in self.coordinator.data:
+            raw_text = self.coordinator.data["dirac_slots_raw"]
+            
+            # Extract everything strictly bounded between \x0b and \x1a
+            extracted_slots = re.findall(r'\x0b([^\x1a]+)\x1a', raw_text)
+            
+            if extracted_slots:
+                cleaned = [s.strip() for s in extracted_slots if s.strip()]
+                if cleaned:
+                    self._attr_options = cleaned
+                    _LOGGER.warning("DEBUG: Successfully parsed delimiter options -> %r", self._attr_options)
+                    
         super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
         """Change the active slot index by matching the selected custom name."""
-        current_options = self.options
+        slots = self.options
         try:
-            slot_index = current_options.index(option)
+            slot_index = slots.index(option)
         except ValueError:
             slot_index = 0
             
         await self._device.async_set_dirac_filter_slot(slot_index)
+        
         self._attr_native_value = option
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
