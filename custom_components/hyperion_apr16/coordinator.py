@@ -39,6 +39,13 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Fetch base status dict directly from Apr16 client in device.py
             data = await self.device.async_get_status()
 
+            # --- Raw async_get_status Inspection Logger ---
+            _LOG.warning(
+                "RAW async_get_status Payload -> keys: %s | full_data: %r",
+                list(data.keys()) if isinstance(data, dict) else type(data),
+                data,
+            )
+            
             # Attach device property metadata
             data["host_ip"] = getattr(self.device, "host", None)
 
@@ -127,14 +134,6 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOG.debug("Could not parse Dirac filter slots: %s", err)
                     data["dirac_filter_slots"] = ["Slot 0", "Slot 1", "Slot 2"]
 
-            # Unified Polling Inspection Logger (using WARNING so it outputs immediately without debug flags)
-            _LOG.warning(
-                "Hyperion APR-16 Polled Payload -> keys: %s | dirac_slot: %r | dirac_active: %r | dirac_filter_slots: %r",
-                list(data.keys()) if isinstance(data, dict) else type(data),
-                data.get("dirac_slot"),
-                data.get("dirac_active"),
-                data.get("dirac_filter_slots"),
-            )
 
             return data
 
