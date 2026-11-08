@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from custom_components.hyperion_apr16 import device
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -42,6 +43,7 @@ async def async_setup_entry(
         HyperionSensor(coordinator, entry, "host_ip", "Host IP", None),
         HyperionSensor(coordinator, entry, "bass", "Input Bass", "dB"),
         HyperionSensor(coordinator, entry, "treble", "Input Treble", "dB"),
+        HyperionActiveDiracSlotSensor(coordinator, device, entry),
     ]
 
     async_add_entities(sensors)
@@ -194,3 +196,49 @@ class HyperionSensor(HyperionBaseSensor):
         if not data:
             return None
         return data.get(self._key)
+
+class HyperionActiveDiracSlotSensor(CoordinatorEntity, SensorEntity):
+    """Sensor tracking the active Dirac filter slot and ART state."""
+
+    def __init__(
+        self,
+        coordinator: HyperionDataUpdateCoordinator,
+        device: Any,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._device = device
+        self._attr_unique_id = f"{entry.entry_id}_active_dirac_slot"
+        self._attr_name = f"{entry.title} Active Dirac Slot"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": entry.title,
+            "manufacturer": "AudioControl",
+            "model": "Hyperion APR-16",
+        }
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the name of the currently active slot."""
+        if not self.coordinator.data:
+            return None
+
+        slot_idx = self.coordinator.data.get("dirac_slot", 0)
+        slots = self.coordinator.data.get("dirac_filter_slots", ["Slot 1", "Slot 2", "Slot 3"])
+        
+        if isinstance(slot_idx, int) and 0 <= slot_idx < len(slots):
+            return slots[slot_idx]
+        return f"Slot {slot_idx + 1}"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes including Dirac Active state and raw slots."""
+        if not self.coordinator.data:
+            return {}
+            
+        return {
+            "slot_index": self.coordinator.data.get("dirac_slot"),
+            "dirac_active": self.coordinator.data.get("dirac_active"),
+            "available_slots": self.coordinator.data.get("dirac_filter_slots", []),
+        }

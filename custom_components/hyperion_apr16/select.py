@@ -11,7 +11,6 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -43,6 +42,13 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
     device = data["device"]
+
+    # Pull the exact slot list from coordinator data, with a safe fallback
+    (
+        coordinator.data.get("dirac_filter_slots")
+        if coordinator.data
+        else None
+    ) or ["Slot 0", "Slot 1", "Slot 2"]
 
     async_add_entities([
         HyperionAudioModeSelect(coordinator, device, entry),
@@ -97,24 +103,13 @@ class HyperionAudioModeSelect(HyperionBaseSelect):
             _LOG.error("Failed to set audio mode to %s: %s", option, err)
 
 
-class HyperionDiracSlotSelect(HyperionBaseSelect, RestoreEntity):
-    """Representation of the Dirac Filter Slot select entity with state restoration."""
+class HyperionDiracSlotSelect(HyperionBaseSelect):
+    """Representation of the Dirac Filter Slot select entity."""
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
         self._attr_options = ["Slot 1", "Slot 2", "Slot 3"]
-        self._restored_option: str | None = None
-
-    async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass to restore last state."""
-        await super().async_added_to_hass()
-        if (
-            (last_state := await self.async_get_last_state()) is not None
-            and last_state.state
-        ):
-            if last_state.state not in self._attr_options:
-                self._attr_options.append(last_state.state)
-            self._restored_option = last_state.state
+        self._attr_native_value = None
 
     @property
     def options(self) -> list[str]:
@@ -123,14 +118,8 @@ class HyperionDiracSlotSelect(HyperionBaseSelect, RestoreEntity):
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently selected slot from coordinator data, falling back to restored state."""
-        if self.coordinator.data and "dirac_slot" in self.coordinator.data:
-            slot_idx = self.coordinator.data.get("dirac_slot")
-            current_options = self.options
-            if isinstance(slot_idx, int) and 0 <= slot_idx < len(current_options):
-                return current_options[slot_idx]
-        # Fall back to our safely cached restored option until the coordinator updates
-        return self._restored_option
+        """Return the currently selected slot, preserving local state."""
+        return self._attr_native_value
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator and parse slot names by delimiters."""
@@ -156,8 +145,8 @@ class HyperionDiracSlotSelect(HyperionBaseSelect, RestoreEntity):
         except ValueError:
             slot_index = 0
             
-        # Update our cache immediately so it stays consistent
-        self._restored_option = option
-        
         await self._device.async_set_dirac_filter_slot(slot_index)
+        
+        self._attr_native_value = option
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
