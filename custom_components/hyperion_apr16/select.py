@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from aiohttp import ClientError
@@ -11,6 +10,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -103,13 +103,22 @@ class HyperionAudioModeSelect(HyperionBaseSelect):
             _LOG.error("Failed to set audio mode to %s: %s", option, err)
 
 
-class HyperionDiracSlotSelect(HyperionBaseSelect):
-    """Representation of the Dirac Filter Slot select entity."""
+class HyperionDiracSlotSelect(HyperionBaseSelect, RestoreEntity):
+    """Representation of the Dirac Filter Slot select entity with state restoration."""
 
     def __init__(self, coordinator, device, entry) -> None:
         super().__init__(coordinator, device, entry, "dirac_slot", "Dirac Filter Slot")
-        self._attr_options = ["Slot 1", "Slot 2", "Slot 3"]
+        self._attr_options = ["Slot 0", "Slot 1", "Slot 2"]
         self._attr_native_value = None
+
+    async def async_added_to_hass(self) -> None:
+        """Run when entity about to be added to hass to restore last state."""
+        await super().async_added_to_hass()
+        if (
+            (last_state := await self.async_get_last_state()) is not None
+            and last_state.state in self._attr_options
+        ):
+            self._attr_native_value = last_state.state
 
     @property
     def options(self) -> list[str]:
@@ -118,23 +127,19 @@ class HyperionDiracSlotSelect(HyperionBaseSelect):
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently selected slot, preserving local state."""
+        """Return the currently selected slot by mapping the device index or restored state."""
+        if self.coordinator.data and "dirac_slot" in self.coordinator.data:
+            slot_idx = self.coordinator.data.get("dirac_slot")
+            if isinstance(slot_idx, int) and 0 <= slot_idx < len(self._attr_options):
+                return self._attr_options[slot_idx]
         return self._attr_native_value
 
     def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator and parse slot names by delimiters."""
-        if self.coordinator.data and "dirac_slots_raw" in self.coordinator.data:
-            raw_text = self.coordinator.data["dirac_slots_raw"]
-            
-            # Extract everything strictly bounded between \x0b and \x1a
-            extracted_slots = re.findall(r'\x0b([^\x1a]+)\x1a', raw_text)
-            
-            if extracted_slots:
-                cleaned = [s.strip() for s in extracted_slots if s.strip()]
-                if cleaned:
-                    self._attr_options = cleaned
-                    _LOGGER.warning("DEBUG: Successfully parsed delimiter options -> %r", self._attr_options)
-                    
+        """Handle updated data from the coordinator and update options."""
+        if self.coordinator.data:
+            new_slots = self.coordinator.data.get("dirac_filter_slots")
+            if new_slots:
+                self._attr_options = new_slots
         super()._handle_coordinator_update()
 
     async def async_select_option(self, option: str) -> None:
