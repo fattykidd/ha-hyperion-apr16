@@ -43,6 +43,7 @@ async def test_setup_and_unload(hass: HomeAssistant) -> None:
         # Configure mock client instance methods
         mock_client = mock_client_class.return_value
         mock_client.async_connect = AsyncMock(return_value=True)
+        mock_client.async_get_dirac_filter_slots_list = AsyncMock(return_value=[])  # asked by the button platform
 
         # Set up the config entry
         assert await hass.config_entries.async_setup(config_entry.entry_id)

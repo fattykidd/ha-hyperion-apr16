@@ -36,6 +36,7 @@ async def device(hass: HomeAssistant):
         ),
     ):
         device = mock_client_class.return_value
+        device.async_get_dirac_filter_slots_list = AsyncMock(return_value=[])  # asked by the button platform
         device.set_max_volume = AsyncMock()
         device.set_power_on_volume = AsyncMock()
 

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Self
 
+import pytest
 from aiohttp import ClientConnectionError
 
 from custom_components.hyperion_apr16.config import APR16Config
-from custom_components.hyperion_apr16.device import Apr16
+from custom_components.hyperion_apr16.device import Apr16, parse_dirac_filtering
 
 
 class FakeResponse:
@@ -70,3 +71,63 @@ async def test_the_lookup_stops_when_the_processor_stops_answering() -> None:
 
     assert names == {1: "Apple TV", 2: "PS5"}
     assert len(session.requests) == 3  # input 3 got no answer, so it didn't go on to 4
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        (bytes.fromhex("08011001"), True),  # field 1 set: filtering on
+        (bytes.fromhex("0801"), True),
+        (b"", False),  # protobuf leaves out a zero value
+        (bytes.fromhex("1001"), False),  # other fields only
+        (bytes.fromhex("0800"), False),
+    ],
+)
+def test_the_dirac_filtering_reply_is_read(body: bytes, expected: bool) -> None:
+    assert parse_dirac_filtering(body) is expected
+
+
+class FakeAtlasResponse:
+    def __init__(self, status: int, body: bytes) -> None:
+        self.status = status
+        self._body = body
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def read(self) -> bytes:
+        return self._body
+
+
+class FakeAtlasSession:
+    def __init__(self, response: FakeAtlasResponse | Exception) -> None:
+        self._response = response
+        self.urls: list[str] = []
+
+    def post(self, url: str, **_: Any) -> FakeAtlasResponse:
+        self.urls.append(url)
+        if isinstance(self._response, Exception):
+            raise self._response
+        return self._response
+
+
+async def test_dirac_filtering_is_asked_of_the_atlas_service() -> None:
+    session = FakeAtlasSession(FakeAtlasResponse(200, bytes.fromhex("08011001")))
+
+    assert await make_device(session).async_get_dirac_filtering() is True
+    assert session.urls == ["http://192.168.1.50/commands.v1.AtlasService/GetDiracFiltering"]
+
+
+async def test_dirac_filtering_is_unknown_when_the_processor_says_no() -> None:
+    session = FakeAtlasSession(FakeAtlasResponse(503, b""))
+
+    assert await make_device(session).async_get_dirac_filtering() is None
+
+
+async def test_dirac_filtering_is_unknown_when_the_processor_cannot_be_reached() -> None:
+    session = FakeAtlasSession(ClientConnectionError("no answer"))
+
+    assert await make_device(session).async_get_dirac_filtering() is None

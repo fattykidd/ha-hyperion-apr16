@@ -132,12 +132,20 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._schedule_full_refresh()
 
     def _on_dirac_state(self, state: dict[str, Any]) -> None:
-        """The active Dirac slot changed on the processor (or in its web UI)."""
-        slot = state.get("active_slot")
-        is_slot = isinstance(slot, int) and not isinstance(slot, bool)
-        if self.data is None or not is_slot or self.data.get("active_slot") == slot:
+        """The Dirac slot or filtering changed on the processor (or in its web UI)."""
+        if self.data is None:
             return
-        self.async_set_updated_data({**self.data, "active_slot": slot})
+
+        changes: dict[str, Any] = {}
+        slot = state.get("active_slot")
+        if isinstance(slot, int) and not isinstance(slot, bool):
+            changes["active_slot"] = slot
+        filtering = state.get("filtering_enabled")
+        if isinstance(filtering, bool):
+            changes["dirac_active"] = filtering
+
+        if any(self.data.get(key) != value for key, value in changes.items()):
+            self.async_set_updated_data({**self.data, **changes})
 
     def _schedule_full_refresh(self) -> None:
         """Re-read the whole status now, once, however many changes arrive meanwhile."""
@@ -189,6 +197,10 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # The active Dirac slot, read live from the processor
         data["active_slot"] = await self.device.async_get_dirac_active_slot()
+
+        # Whether Dirac filtering is on. If it can't be read this time, keep what we knew.
+        filtering = await self.device.async_get_dirac_filtering()
+        data["dirac_active"] = filtering if filtering is not None else (self.data or {}).get("dirac_active")
 
         _LOG.debug("RAW async_get_status Payload -> keys: %s | full_data: %r", list(data), data)
 

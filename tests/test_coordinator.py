@@ -31,6 +31,7 @@ def make_device() -> MagicMock:
     device.async_get_gain = AsyncMock(return_value={"level": 0})
     device.async_get_lipsync = AsyncMock(return_value={"delayMs": 0})
     device.async_get_dirac_active_slot = AsyncMock(return_value=1)
+    device.async_get_dirac_filtering = AsyncMock(return_value=True)
     device.async_get_input_names = AsyncMock(return_value={1: "Apple TV", 2: "PS5"})
     device.async_get_max_volume = AsyncMock(return_value=75.0)
     device.async_get_power_on_volume = AsyncMock(return_value=35.0)
@@ -176,6 +177,37 @@ async def test_the_volume_limits_reported_by_the_audio_stream_are_applied(coordi
 async def test_the_dirac_slot_and_input_names_are_read_with_the_status(coordinator) -> None:
     assert coordinator.data["active_slot"] == 1
     assert coordinator.data["input_names"] == {1: "Apple TV", 2: "PS5"}
+
+
+async def test_dirac_filtering_is_read_from_the_processor(coordinator) -> None:
+    assert coordinator.data["dirac_active"] is True
+
+
+async def test_dirac_filtering_keeps_its_last_value_when_it_cannot_be_read(coordinator) -> None:
+    coordinator.device.async_get_dirac_filtering.return_value = None
+
+    await coordinator.async_refresh()
+
+    assert coordinator.data["dirac_active"] is True
+
+
+async def test_dirac_filtering_is_unknown_until_it_has_been_read(hass: HomeAssistant) -> None:
+    device = make_device()
+    device.async_get_dirac_filtering = AsyncMock(return_value=None)
+    coordinator = HyperionDataUpdateCoordinator(hass, device=device)
+
+    await coordinator.async_refresh()
+
+    assert coordinator.data["dirac_active"] is None
+
+
+async def test_dirac_filtering_from_the_stream_is_applied_without_a_read(coordinator) -> None:
+    reads = coordinator.device.async_get_status.await_count
+
+    coordinator._on_dirac_state({"active_slot": 1, "filtering_enabled": False})
+
+    assert coordinator.data["dirac_active"] is False
+    assert coordinator.device.async_get_status.await_count == reads
 
 
 async def test_a_change_of_dirac_slot_from_the_stream_is_applied_without_a_read(coordinator) -> None:

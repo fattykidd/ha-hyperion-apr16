@@ -15,6 +15,16 @@ from .helper import percent_to_db
 _LOG = logging.getLogger(__name__)
 
 
+def parse_dirac_filtering(body: bytes) -> bool:
+    """
+    Read whether Dirac filtering is on from a GetDiracFiltering reply.
+
+    The reply is field 1 as a boolean (``08 01`` for on, followed by constant fields). Protobuf leaves out
+    zero values, so an empty reply means off.
+    """
+    return len(body) >= 2 and body[0] == 0x08 and body[1] != 0
+
+
 class Apr16:
     """Async REST API client for AudioControl Hyperion APR-16."""
 
@@ -151,6 +161,22 @@ class Apr16:
             _LOG.debug("ISOLATED GetDiracActiveSlot failed: %s", err)
             
         return 0
+
+    async def async_get_dirac_filtering(self) -> bool | None:
+        """Ask the processor whether Dirac filtering is on, or None if it couldn't be read."""
+        url = f"http://{self.host}/commands.v1.AtlasService/GetDiracFiltering"
+        headers = {"Content-Type": "application/proto", "connect-protocol-version": "1"}
+        try:
+            async with self._session.post(
+                url, headers=headers, data=b"", timeout=ClientTimeout(total=2.0)
+            ) as response:
+                if response.status != 200:
+                    _LOG.debug("GetDiracFiltering returned HTTP %s", response.status)
+                    return None
+                return parse_dirac_filtering(await response.read())
+        except (TimeoutError, ClientError, OSError) as err:
+            _LOG.debug("GetDiracFiltering failed: %s", err)
+            return None
 
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
@@ -303,8 +329,6 @@ class Apr16:
             "video_detail": video_detail,
             "temperature": temperature,
             "dirac_slots_raw": dirac_slots,
-            "dirac_active": True,
-            "dirac_slot": 0,
         }
 
     async def power_on(self) -> None:

@@ -43,6 +43,7 @@ async def test_media_player_entity(hass: HomeAssistant) -> None:
     ):
         mock_client = mock_client_class.return_value
         mock_client.async_connect = AsyncMock(return_value=True)
+        mock_client.async_get_dirac_filter_slots_list = AsyncMock(return_value=[])  # asked by the button platform
         mock_client.async_send_command = AsyncMock(return_value=True)
         mock_client.power_off = AsyncMock(return_value=True)
         mock_client.async_power_off = AsyncMock(return_value=True)
