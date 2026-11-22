@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*' # Trigger whenever a tag starting with 'v' is pushed (e.g., v0.1.1)
+      - 'v*' # Trigger whenever a tag starting with 'v' is pushed (e.g., v0.3.5)
 
 jobs:
   release:
@@ -14,9 +14,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # A stable tag must match the manifest and have a changelog entry. Tags containing a "-" (for example
+      # v0.3.6-beta) are pre-releases: they are published as such, which HACS does not offer to stable users.
+      - name: Check the tag against the manifest and changelog
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          manifest=$(jq -r .version custom_components/hyperion_apr16/manifest.json)
+          if [ "$manifest" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the manifest version $manifest"
+            exit 1
+          fi
+          if ! grep -q "^## \[$version\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for $version"
+            exit 1
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true # Automatically generates release notes from PR titles/commits
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
