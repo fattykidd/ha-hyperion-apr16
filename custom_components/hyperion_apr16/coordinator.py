@@ -55,6 +55,7 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._refresh_again = False
         self._last_audio_state: dict[str, Any] | None = None
         self._last_inputs_state: dict[str, Any] | None = None
+        self._pushed: dict[str, Any] = {}  # values only the streams report: a REST refresh must not lose them
         self._static: dict[str, Any] = {}  # firmware and MAC address: read once, they don't change
 
     # ------------------------------------------------------------------ live streams
@@ -70,6 +71,7 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "audio": self._on_audio_state,
             "inputs": self._on_inputs_state,
             "dirac": self._on_dirac_state,
+            "speakers": self._on_speakers_state,
         }
         for kind in STREAM_KINDS:
             stream = StateStream(
@@ -147,6 +149,25 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if any(self.data.get(key) != value for key, value in changes.items()):
             self.async_set_updated_data({**self.data, **changes})
 
+    def _on_speakers_state(self, state: dict[str, Any]) -> None:
+        """The speaker set-up changed. Only the loudness setting is used; the stream is its only source."""
+        changes: dict[str, Any] = {}
+        capability = state.get("loudness_capability")
+        if isinstance(capability, str):
+            changes["loudness_supported"] = capability == "supported"
+        enabled = state.get("loudness_enabled")
+        if isinstance(enabled, bool):
+            changes["loudness"] = enabled
+        self.async_apply_pushed(changes)
+
+    def async_apply_pushed(self, changes: dict[str, Any]) -> None:
+        """Take values that only a stream can report, and keep them across REST refreshes."""
+        if not changes:
+            return
+        self._pushed.update(changes)
+        if self.data is not None and any(self.data.get(key) != value for key, value in changes.items()):
+            self.async_set_updated_data({**self.data, **changes})
+
     def _schedule_full_refresh(self) -> None:
         """Re-read the whole status now, once, however many changes arrive meanwhile."""
         if self._refresh_task is not None and not self._refresh_task.done():
@@ -188,7 +209,7 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(f"Error communicating with Hyperion APR-16: {err}") from err
 
         self._last_full_refresh = time.monotonic()
-        return data
+        return {**data, **self._pushed}
 
     async def _async_fetch_status(self) -> dict[str, Any]:
         """Read the whole status over REST."""

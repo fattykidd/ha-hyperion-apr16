@@ -228,6 +228,44 @@ async def test_dirac_states_without_a_usable_slot_are_ignored(coordinator) -> No
     assert coordinator.data == before
 
 
+async def test_loudness_comes_from_the_speakers_stream(coordinator) -> None:
+    reads = coordinator.device.async_get_status.await_count
+
+    coordinator._on_speakers_state({"loudness_capability": "supported", "loudness_enabled": True, "layout": "7.3.6"})
+
+    assert coordinator.data["loudness"] is True
+    assert coordinator.data["loudness_supported"] is True
+    assert coordinator.device.async_get_status.await_count == reads
+
+
+async def test_loudness_is_not_supported_when_the_processor_says_so(coordinator) -> None:
+    coordinator._on_speakers_state({"loudness_capability": "unsupported", "loudness_enabled": False})
+
+    assert coordinator.data["loudness_supported"] is False
+
+
+async def test_loudness_survives_a_refresh_over_rest(coordinator) -> None:
+    coordinator._on_speakers_state({"loudness_capability": "supported", "loudness_enabled": True})
+
+    await coordinator.async_refresh()  # REST knows nothing about loudness
+
+    assert coordinator.data["loudness"] is True
+    assert coordinator.data["loudness_supported"] is True
+
+
+async def test_loudness_is_unknown_until_the_processor_has_reported_it(coordinator) -> None:
+    assert "loudness" not in coordinator.data
+    assert "loudness_supported" not in coordinator.data
+
+
+async def test_speaker_states_without_loudness_are_ignored(coordinator) -> None:
+    before = dict(coordinator.data)
+
+    coordinator._on_speakers_state({"layout": "7.3.6", "loudness_enabled": "yes", "loudness_capability": 1})
+
+    assert coordinator.data == before
+
+
 async def test_values_of_the_wrong_type_are_ignored(coordinator) -> None:
     before = dict(coordinator.data)
 
@@ -276,7 +314,7 @@ async def test_the_streams_are_started_and_stopped(coordinator) -> None:
     coordinator.device.async_open_state_stream = never_connects
 
     coordinator.async_start_streams()
-    assert len(coordinator._streams) == 3
+    assert len(coordinator._streams) == 4
     assert not coordinator.streams_live
 
     await coordinator.async_stop_streams()

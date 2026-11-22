@@ -178,6 +178,13 @@ class Apr16:
             _LOG.debug("GetDiracFiltering failed: %s", err)
             return None
 
+    async def async_set_loudness(self, enabled: bool) -> bool:
+        """Turn loudness compensation on or off."""
+        # On is field 1 set to true (08 01); protobuf leaves out a zero value, so off is an empty request.
+        payload = bytes.fromhex("0801") if enabled else b""
+        res = await self._send_atlas_request("SetDSP2Loudness", payload)
+        return res is not None
+
     async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
         """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
         # Slot 0: \x10\x01 -> hex: 1001

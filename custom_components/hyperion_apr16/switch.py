@@ -33,6 +33,7 @@ async def async_setup_entry(
         HyperionDisplayPowerSwitch(coordinator, device, entry),
         HyperionTriggerSwitch(coordinator, device, entry),
         HyperionDiracSwitch(coordinator, device, entry),
+        HyperionLoudnessSwitch(coordinator, device, entry),
     ]
 
     async_add_entities(switches)
@@ -174,3 +175,33 @@ class HyperionDiracSwitch(HyperionBaseSwitch):
         if self.coordinator.data:
             self.coordinator.async_set_updated_data({**self.coordinator.data, "dirac_active": enabled})
         await self.coordinator.async_request_refresh()
+
+
+class HyperionLoudnessSwitch(HyperionBaseSwitch):
+    """Switch for loudness compensation, which adds bass at low listening levels."""
+
+    def __init__(self, coordinator, device, entry):
+        super().__init__(coordinator, device, entry, "loudness_switch", "Loudness")
+
+    @property
+    def available(self) -> bool:
+        """Unavailable while the processor is unreachable, or on firmware without loudness."""
+        supported = (self.coordinator.data or {}).get("loudness_supported")
+        return super().available and supported is not False
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if loudness is on, or None until the processor has reported it."""
+        return (self.coordinator.data or {}).get("loudness")
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn loudness on."""
+        await self._set_loudness(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn loudness off."""
+        await self._set_loudness(False)
+
+    async def _set_loudness(self, enabled: bool) -> None:
+        await self._device.async_set_loudness(enabled)
+        self.coordinator.async_apply_pushed({"loudness": enabled})  # the speakers stream confirms it

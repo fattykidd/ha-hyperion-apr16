@@ -40,6 +40,7 @@ async def setup_integration(hass: HomeAssistant, processor: dict):
     ):
         device = mock_client_class.return_value
         device.async_get_dirac_filter_slots_list = AsyncMock(return_value=[])  # asked by the button platform
+        device.async_set_loudness = AsyncMock(return_value=True)
         device.async_set_dirac_filtering = AsyncMock(
             side_effect=lambda enabled: processor.update(dirac_active=enabled)
         )
@@ -53,7 +54,9 @@ async def setup_integration(hass: HomeAssistant, processor: dict):
 
 @pytest.fixture
 async def device(hass: HomeAssistant):
-    async for device in setup_integration(hass, {"dirac_active": False}):
+    async for device in setup_integration(
+        hass, {"dirac_active": False, "loudness": False, "loudness_supported": True}
+    ):
         yield device
 
 
@@ -61,6 +64,18 @@ async def device(hass: HomeAssistant):
 async def device_unknown(hass: HomeAssistant):
     async for device in setup_integration(hass, {"dirac_active": None}):
         yield device
+
+
+@pytest.fixture
+async def device_without_loudness(hass: HomeAssistant):
+    async for device in setup_integration(hass, {"dirac_active": False, "loudness_supported": False}):
+        yield device
+
+
+def loudness_id(hass: HomeAssistant) -> str:
+    found = er.async_get(hass).async_get_entity_id("switch", DOMAIN, f"{ENTRY_ID}_loudness_switch")
+    assert found
+    return found
 
 
 def switch_id(hass: HomeAssistant) -> str:
@@ -88,3 +103,30 @@ async def test_turning_it_off_tells_the_processor(hass: HomeAssistant, device) -
     await hass.services.async_call("switch", "turn_off", {"entity_id": switch_id(hass)}, blocking=True)
 
     device.async_set_dirac_filtering.assert_awaited_once_with(False)
+
+
+async def test_loudness_shows_what_the_processor_reports(hass: HomeAssistant, device) -> None:
+    assert hass.states.get(loudness_id(hass)).state == "off"
+
+
+async def test_loudness_is_unknown_until_the_processor_has_reported_it(hass: HomeAssistant, device_unknown) -> None:
+    assert hass.states.get(loudness_id(hass)).state == "unknown"
+
+
+async def test_loudness_is_unavailable_on_firmware_without_it(hass: HomeAssistant, device_without_loudness) -> None:
+    assert hass.states.get(loudness_id(hass)).state == "unavailable"
+
+
+async def test_turning_loudness_on_tells_the_processor(hass: HomeAssistant, device) -> None:
+    await hass.services.async_call("switch", "turn_on", {"entity_id": loudness_id(hass)}, blocking=True)
+
+    device.async_set_loudness.assert_awaited_once_with(True)
+    assert hass.states.get(loudness_id(hass)).state == "on"
+
+
+async def test_turning_loudness_off_tells_the_processor(hass: HomeAssistant, device) -> None:
+    await hass.services.async_call("switch", "turn_on", {"entity_id": loudness_id(hass)}, blocking=True)
+    await hass.services.async_call("switch", "turn_off", {"entity_id": loudness_id(hass)}, blocking=True)
+
+    assert device.async_set_loudness.await_args_list[-1].args == (False,)
+    assert hass.states.get(loudness_id(hass)).state == "off"

@@ -131,3 +131,37 @@ async def test_dirac_filtering_is_unknown_when_the_processor_cannot_be_reached()
     session = FakeAtlasSession(ClientConnectionError("no answer"))
 
     assert await make_device(session).async_get_dirac_filtering() is None
+
+
+class FakeAtlasPostResponse:
+    status = 200
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def text(self) -> str:
+        return "LOUDNESS"
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+class RecordingSession:
+    def __init__(self) -> None:
+        self.posts: list[tuple[str, bytes]] = []
+
+    def post(self, url: str, **kwargs: Any) -> FakeAtlasPostResponse:
+        self.posts.append((url, kwargs["data"]))
+        return FakeAtlasPostResponse()
+
+
+@pytest.mark.parametrize(("enabled", "body"), [(True, bytes.fromhex("0801")), (False, b"")])
+async def test_loudness_is_set_with_the_request_the_processor_expects(enabled: bool, body: bytes) -> None:
+    session = RecordingSession()
+
+    assert await make_device(session).async_set_loudness(enabled) is True
+
+    assert session.posts == [("http://192.168.1.50:80/commands.v1.AtlasService/SetDSP2Loudness", body)]
