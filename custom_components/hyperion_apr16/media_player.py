@@ -91,12 +91,24 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     @property
     def source(self) -> str | None:
-        """Return the current input source."""
-        return self.coordinator.data.get("active_input")
+        """Return the current input source using user-defined custom name."""
+        data = self.coordinator.data or {}
+        input_map = data.get("input_names", {})
+        current_id = data.get("input_id")
+        
+        # Fall back to active_input string if name map isn't populated yet
+        return input_map.get(current_id, data.get("active_input"))
 
     @property
     def source_list(self) -> list[str] | None:
-        """List of available input sources."""
+        """List of available input sources using user-defined custom names."""
+        data = self.coordinator.data or {}
+        input_map = data.get("input_names", {})
+        
+        if input_map:
+            return list(input_map.values())
+            
+        # Fallback list if input_names haven't synced to coordinator data yet
         return ["HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4", "HDMI 5", "HDMI 6", "HDMI 7", "Digital 1", "Digital 2", "Digital 3", "Digital 4", "Analog 1", "Analog 2", "Analog 3", "Dante", "eARC"]
 
     @property
@@ -142,6 +154,18 @@ class HyperionMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         await self.coordinator.async_request_refresh()
 
     async def async_select_source(self, source: str) -> None:
-        """Select input source."""
-        await self._device.set_active_input(source)
+        """Select input source by matching user-defined name to its integer ID."""
+        data = self.coordinator.data or {}
+        input_map = data.get("input_names", {})
+        
+        # Reverse lookup: find the integer ID (key) by its custom name (value)
+        target_id = next((k for k, v in input_map.items() if v == source), None)
+        
+        if target_id is not None:
+            await self._device.set_active_input(target_id)
+        else:
+            # Fallback if name wasn't found in map
+            _LOG.warning("Could not find integer ID for input name '%s', defaulting to ID 1", source)
+            await self._device.set_active_input(1)
+            
         await self.coordinator.async_request_refresh()

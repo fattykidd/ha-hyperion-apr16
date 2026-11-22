@@ -37,11 +37,14 @@ async def async_setup_entry(
         HyperionMuteSensor(coordinator, entry),
         HyperionSensor(coordinator, entry, "audio_format", "Audio Format", None),
         HyperionSensor(coordinator, entry, "video_detail", "Video Signal", None),
+        HyperionSensor(coordinator, entry, "video_format", "Video Format", None),
+        HyperionSensor(coordinator, entry, "hdr_status", "HDR Status", None),
         HyperionSensor(coordinator, entry, "brightness", "Display Brightness", "%"),
         HyperionSensor(coordinator, entry, "temperature", "Temperature", "°C", SensorDeviceClass.TEMPERATURE),
         HyperionSensor(coordinator, entry, "host_ip", "Host IP", None),
         HyperionSensor(coordinator, entry, "bass", "Input Bass", "dB"),
         HyperionSensor(coordinator, entry, "treble", "Input Treble", "dB"),
+        HyperionActiveDiracSlotSensor(coordinator, coordinator.device, entry),
     ]
 
     async_add_entities(sensors)
@@ -194,3 +197,65 @@ class HyperionSensor(HyperionBaseSensor):
         if not data:
             return None
         return data.get(self._key)
+
+import re
+
+
+class HyperionActiveDiracSlotSensor(CoordinatorEntity, SensorEntity):
+    """Sensor tracking the active Dirac filter slot and ART state."""
+
+    def __init__(
+        self,
+        coordinator: HyperionDataUpdateCoordinator,
+        device: Any,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._device = device
+        self._attr_unique_id = f"{entry.entry_id}_active_dirac_slot"
+        self._attr_name = f"{entry.title} Active Dirac Slot"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": entry.title,
+            "manufacturer": "AudioControl",
+            "model": "Hyperion APR-16",
+        }
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the user-defined name of the currently active slot."""
+        if not self.coordinator.data:
+            return None
+
+        slot_idx = self.coordinator.data.get("active_slot", 0)
+        
+        # Default fallback slot names
+        slots = ["Slot 1", "Slot 2", "Slot 3"]
+        
+        # Parse custom slot names from raw payload identically to the select entity
+        if "dirac_slots_raw" in self.coordinator.data:
+            raw_text = self.coordinator.data["dirac_slots_raw"]
+            extracted_slots = re.findall(r'\x0b([^\x1a]+)\x1a', raw_text)
+            if extracted_slots:
+                cleaned = [s.strip() for s in extracted_slots if s.strip()]
+                if cleaned:
+                    slots = cleaned
+        elif "dirac_filter_slots" in self.coordinator.data:
+            slots = self.coordinator.data.get("dirac_filter_slots", slots)
+
+        if isinstance(slot_idx, int) and 0 <= slot_idx < len(slots):
+            return slots[slot_idx]
+        return f"Slot {slot_idx + 1}"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes including Dirac Active state and raw slots."""
+        if not self.coordinator.data:
+            return {}
+            
+        return {
+            "slot_index": self.coordinator.data.get("active_slot"),
+            "dirac_active": self.coordinator.data.get("dirac_active"),
+            "available_slots": self.coordinator.data.get("dirac_filter_slots", []),
+        }

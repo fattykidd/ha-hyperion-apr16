@@ -3,14 +3,26 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout, ClientWebSocketResponse
 
 from .config import APR16Config
+from .const import STATE_STREAM_PATH, STATE_STREAM_PORT
 from .helper import percent_to_db
 
 _LOG = logging.getLogger(__name__)
+
+
+def parse_dirac_filtering(body: bytes) -> bool:
+    """
+    Read whether Dirac filtering is on from a GetDiracFiltering reply.
+
+    The reply is field 1 as a boolean (``08 01`` for on, followed by constant fields). Protobuf leaves out
+    zero values, so an empty reply means off.
+    """
+    return len(body) >= 2 and body[0] == 0x08 and body[1] != 0
 
 
 class Apr16:
@@ -22,6 +34,7 @@ class Apr16:
         port: int = 8080,
         session: ClientSession | None = None,
         device_config: APR16Config | None = None,
+        session_cookie: str | None = None,
     ) -> None:
         """Initialize the client supporting both direct args and config dataclass."""
         if device_config is not None:
@@ -33,12 +46,17 @@ class Apr16:
 
         self._session = session
         self._base_url = f"http://{self.host}:{self.port}"
+        self._state_stream_url = f"ws://{self.host}:{STATE_STREAM_PORT}{STATE_STREAM_PATH}"
+        
+        # Port 80 explicit base URL for Connect-RPC / Atlas service endpoints
+        self._atlas_base_url = f"http://{self.host}:80/commands.v1.AtlasService"
+        self.session_cookie = session_cookie
 
     async def _send_request(self, method: str, endpoint: str, data: dict[str, Any] | None = None) -> Any:
         """Send an HTTP request to the APR-16 API using the shared session."""
         url = f"{self._base_url}{endpoint}"
         try:
-            async with self._session.request(method, url, json=data, timeout=10) as response:
+            async with self._session.request(method, url, json=data, timeout=ClientTimeout(total=10)) as response:
                 response.raise_for_status()
                 if response.content_type == "application/json":
                     return await response.json()
@@ -46,6 +64,155 @@ class Apr16:
         except (ClientError, TimeoutError, OSError) as err:
             _LOG.error("API request failed for %s: %s", url, err)
             raise
+
+    async def _send_atlas_request(self, endpoint: str, inner_payload: bytes = b"") -> str:
+        """Send a direct binary protocol request to the port 80 Atlas service."""
+        url = f"http://{self.host}:80/commands.v1.AtlasService/{endpoint}"
+        
+        headers = {
+            "Accept": "*/*",
+            "Connect-Protocol-Version": "1",
+            "Content-Type": "application/proto",
+            "Origin": f"http://{self.host}:80",
+            "Referer": f"http://{self.host}:80/",
+            "User-Agent": "HomeAssistant-HyperionIntegration/1.0",
+        }
+        
+        cookies = {
+            "forceUpdate": "true",
+            "atlas_served_asset_session": self.session_cookie,
+        }
+
+        try:
+            async with self._session.post(
+                url, 
+                headers=headers, 
+                cookies=cookies, 
+                data=inner_payload, 
+                timeout=ClientTimeout(total=10)
+            ) as response:
+                response_text = await response.text()
+                if response.status >= 400:
+                    _LOG.error("Atlas RPC error response for %s: %s", endpoint, response_text)
+                response.raise_for_status()
+                return response_text
+        except (ClientError, TimeoutError, OSError) as err:
+            _LOG.error("Atlas request failed for %s: %s", url, err)
+            raise
+
+    # --- Dirac Methods for Port 80 Atlas Service ---
+    
+    async def async_get_dirac_filter_slots(self) -> str:
+        """Fetch Dirac filter slots for status updates."""
+        try:
+            return await self._send_atlas_request("GetDiracFilterSlots", b"")
+        except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+            _LOG.debug("GetDiracFilterSlots request failed: %s", err)
+            return ""
+
+    async def async_get_dirac_filter_slots_list(self) -> list[str]:
+        """Get the list of clean Dirac filter slot names for the select platform."""
+        try:
+            response_text = await self._send_atlas_request("GetDiracFilterSlots", b"")
+            # Extract text patterns matching the slot names
+            raw_matches = re.findall(r'([0-9a-zA-Z\s]+current)', response_text)
+            
+            slot_names = []
+            for match in raw_matches:
+                # Remove ASCII control characters (like \x0b) and trim whitespace
+                cleaned = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', match).strip()
+                if cleaned and cleaned not in slot_names:
+                    slot_names.append(cleaned)
+                    
+            return slot_names if slot_names else []
+        except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+            _LOG.debug("Failed to get Dirac filter slots list: %s", err)
+            return []
+    
+    async def async_get_dirac_active_slot(self) -> int:
+        """Query the hardware live for the active Dirac slot index."""
+
+        url = f"http://{self.host}/commands.v1.AtlasService/GetDiracActiveSlot"
+        headers = {
+            "Content-Type": "application/proto",
+            "connect-protocol-version": "1",
+        }
+        
+        # Use self._session if available, otherwise fallback to self.session
+        session = getattr(self, "_session", getattr(self, "session", None))
+        if not session:
+            _LOG.debug("GetDiracActiveSlot failed: No active aiohttp session found on device client")
+            return 0
+
+        try:
+            async with session.post(url, headers=headers, data=b"", timeout=ClientTimeout(total=2.0)) as response:
+                body = await response.read()
+                _LOG.debug(
+                    "ISOLATED GetDiracActiveSlot -> status: %s | body: %r",
+                    response.status,
+                    body,
+                )
+                if response.status == 200:
+                    if not body:
+                        return 0
+                    if len(body) >= 2 and body[0] == 0x08:
+                        return body[1]
+        except (TimeoutError, ClientError, OSError, KeyError, ValueError) as err:
+            _LOG.debug("ISOLATED GetDiracActiveSlot failed: %s", err)
+            
+        return 0
+
+    async def async_get_dirac_filtering(self) -> bool | None:
+        """Ask the processor whether Dirac filtering is on, or None if it couldn't be read."""
+        url = f"http://{self.host}/commands.v1.AtlasService/GetDiracFiltering"
+        headers = {"Content-Type": "application/proto", "connect-protocol-version": "1"}
+        try:
+            async with self._session.post(
+                url, headers=headers, data=b"", timeout=ClientTimeout(total=2.0)
+            ) as response:
+                if response.status != 200:
+                    _LOG.debug("GetDiracFiltering returned HTTP %s", response.status)
+                    return None
+                return parse_dirac_filtering(await response.read())
+        except (TimeoutError, ClientError, OSError) as err:
+            _LOG.debug("GetDiracFiltering failed: %s", err)
+            return None
+
+    async def async_set_loudness(self, enabled: bool) -> bool:
+        """Turn loudness compensation on or off."""
+        # On is field 1 set to true (08 01); protobuf leaves out a zero value, so off is an empty request.
+        payload = bytes.fromhex("0801") if enabled else b""
+        res = await self._send_atlas_request("SetDSP2Loudness", payload)
+        return res is not None
+
+    async def async_set_dirac_filter_slot(self, slot_index: int) -> bool:
+        """Switch active Dirac filter slot by index (0, 1, 2) using hex-decoded bytes."""
+        # Slot 0: \x10\x01 -> hex: 1001
+        # Slot 1: \x08\x01\x10\x01 -> hex: 08011001
+        # Slot 2: \x08\x02\x10\x01 -> hex: 08021001
+        payload_map = {
+            0: bytes.fromhex("1001"),
+            1: bytes.fromhex("08011001"),
+            2: bytes.fromhex("08021001"),
+        }
+        inner_payload = payload_map.get(slot_index, bytes.fromhex("1001"))
+        res = await self._send_atlas_request("SetDiracFilterSlot", inner_payload)
+        return res is not None
+
+    async def async_set_dirac_filtering(self, enabled: bool) -> bool:
+        """Enable or disable master Dirac filtering using hex-decoded bytes."""
+        # Filtering Off: \x10\x01\x18\x01 -> hex: 10011801
+        # Filtering On:  \x08\x01\x10\x01\x18\x01 -> hex: 080110011801
+        inner_payload = (
+            bytes.fromhex("080110011801") if enabled else bytes.fromhex("10011801")
+        )
+        res = await self._send_atlas_request("SetDiracFiltering", inner_payload)
+        return res is not None
+
+    # --- Existing Apr16 Methods Below ---
+    async def async_open_state_stream(self) -> ClientWebSocketResponse:
+        """Open a WebSocket to the processor's live state endpoint."""
+        return await self._session.ws_connect(self._state_stream_url)
 
     async def async_connect(self) -> bool:
         """Test connection and verify reachability of the APR-16 processor."""
@@ -67,6 +234,7 @@ class Apr16:
         trigger_res = await self._send_request("GET", "/v1/trigger/output")
         audio_format_res = await self._send_request("GET", "/v1/audioformat")
         video_detail_res = await self._send_request("GET", "/v1/videodetail")
+        video_format = await self.async_get_video_format()
         
         temperature = None
         try:
@@ -88,7 +256,6 @@ class Apr16:
         except (ValueError, TypeError):
             _LOG.warning("Failed to parse audio detail value: %s", audio_detail_res)
 
-        # Parse responses safely
         power = False
         if isinstance(power_res, dict):
             val = power_res.get("state", False)
@@ -98,10 +265,7 @@ class Apr16:
         volume_db = -127.5
         
         if isinstance(vol_res, dict):
-            # 1. Absolute scale (0-100 percentage)
             volume_percent = float(vol_res.get("level", 0.0))
-            
-            # 2. Relative scale (Mapped dB attenuation using our helper)
             volume_db = round(percent_to_db(volume_percent), 1)
 
         mute = False
@@ -114,7 +278,6 @@ class Apr16:
             active_input = input_res.get("input", input_res.get("name", "HDMI 1"))
             input_id = input_res.get("inputId", 1)
 
-        # Fetch bass and treble using the extracted numeric input ID
         bass_level = await self.get_input_bass(input_id)
         treble_level = await self.get_input_treble(input_id)
 
@@ -150,6 +313,13 @@ class Apr16:
         elif isinstance(video_detail_res, str):
             video_detail = video_detail_res
 
+        # Fetch Dirac slots safely during status updates
+        dirac_slots = ""
+        try:
+            dirac_slots = await self.async_get_dirac_filter_slots()
+        except (ClientError, TimeoutError, OSError, KeyError, ValueError) as err:
+            _LOG.debug("Could not fetch Dirac filter slots: %s", err)
+
         return {
             "power": power,
             "volume": volume_percent,
@@ -165,7 +335,9 @@ class Apr16:
             "audio_format": audio_format,
             "audio_detail": audio_detail,
             "video_detail": video_detail,
+            "video_format": video_format,
             "temperature": temperature,
+            "dirac_slots_raw": dirac_slots,
         }
 
     async def power_on(self) -> None:
@@ -184,10 +356,11 @@ class Apr16:
         """Set mute state."""
         await self._send_request("POST", "/v1/mute", {"state": mute})
 
-    async def set_active_input(self, source: str) -> None:
-        """Set active input source."""
-        await self._send_request("POST", "/api/atlas/input/active", {"input": source, "inputId": 0})
-        
+    async def set_active_input(self, input_id: int | str) -> None:
+        """Set active input source on port 8080 using the string input ID."""
+        payload = {"input": str(input_id)}
+        await self._send_request("POST", "/api/atlas/input/active", payload)
+
     async def set_audio_mode(self, mode: str) -> None:
         """Set the audio processing mode."""
         await self._send_request("POST", "/v1/audiomode", {"mode": mode})
@@ -196,7 +369,7 @@ class Apr16:
         """Reboot the processor."""
         url = f"{self._base_url}/v1/reboot"
         try:
-            async with self._session.post(url, json={}, timeout=5):
+            async with self._session.post(url, json={}, timeout=ClientTimeout(total=5)):
                 pass
         except (ClientError, TimeoutError, OSError) as err:
             _LOG.info("Reboot command sent; device restarted as expected: %s", err)
@@ -209,14 +382,21 @@ class Apr16:
         """Enable or disable 12V trigger output."""
         await self._send_request("POST", "/v1/trigger/output", {"enabled": bool(state)})
 
-    async def get_input_name(self, input_id: int) -> str:
-        """Get the friendly name for a specific input index."""
-        res = await self._send_request("GET", f"/api/atlas/input/name?input={input_id}")
-        if isinstance(res, dict):
-            return res.get(
-                "name", res.get("input", f"Input {input_id}")
-            )
-        return f"Input {input_id}"
+    async def async_get_input_names(self) -> dict[int, str]:
+        """Fetch the user-defined input names (inputs 1-16) from the port 8080 REST API."""
+        input_names: dict[int, str] = {}
+        for input_id in range(1, 17):
+            url = f"{self._base_url}/api/atlas/input/name?input={input_id}"
+            try:
+                async with self._session.get(
+                    url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=1)
+                ) as resp:
+                    if resp.status == 200 and (name := (await resp.json()).get("name")):
+                        input_names[input_id] = name
+            except (ClientError, TimeoutError, OSError) as err:
+                _LOG.warning("Failed to fetch input name for input %d: %s", input_id, err)
+                break  # stop querying: the processor isn't answering
+        return input_names
 
     async def get_input_bass(self, input_id: int | str) -> float:
         """Get bass level for a specific input (-12 to +12 dB)."""
@@ -269,7 +449,6 @@ class Apr16:
 
     async def set_input_channel_gain(self, input_id: int, gain_db: float) -> None:
         """Set input gain/trim for a specific input via Atlas API."""
-        # Ensure gain value formatting matches your API expectations
         url = f"{self._base_url}/api/atlas/input/{input_id}/gain/{int(gain_db)}"
         async with self._session.post(url, json={"inputId": 0}) as response:
             response.raise_for_status()
@@ -301,6 +480,34 @@ class Apr16:
             response.raise_for_status()
             return await response.json()
 
+    async def async_get_video_format(self) -> str:
+        """Get the video resolution and refresh rate (for example "3840x2160@59.94p", or "No Signal")."""
+        try:
+            res = await self._send_request("GET", "/v1/videoformat")
+        except (ClientError, TimeoutError, OSError):
+            return "Unknown"  # firmware without this endpoint must not stop the rest of the status
+        if isinstance(res, dict):
+            return str(res.get("format") or "Unknown")
+        return "Unknown"
+
+    async def async_get_max_volume(self) -> float:
+        """Get the maximum volume the processor allows (percent)."""
+        res = await self._send_request("GET", "/v1/maxvol")
+        return float(res.get("level", 100.0)) if isinstance(res, dict) else 100.0
+
+    async def set_max_volume(self, level: float) -> None:
+        """Set the maximum volume the processor allows (percent)."""
+        await self._send_request("POST", "/v1/maxvol", {"level": round(level)})
+
+    async def async_get_power_on_volume(self) -> float:
+        """Get the volume the processor starts at when it is powered on (percent)."""
+        res = await self._send_request("GET", "/v1/onvol")
+        return float(res.get("level", 0.0)) if isinstance(res, dict) else 0.0
+
+    async def set_power_on_volume(self, level: float) -> None:
+        """Set the volume the processor starts at when it is powered on (percent)."""
+        await self._send_request("POST", "/v1/onvol", {"level": round(level)})
+
     async def async_get_version(self) -> dict[str, Any]:
         """Fetch firmware version from the device."""
         url = f"{self._base_url}/v1/version"
@@ -315,4 +522,3 @@ class Apr16:
             resp.raise_for_status()
             data = await resp.json()
             return data.get("mac", "00:00:00:00:00:00")
-        
