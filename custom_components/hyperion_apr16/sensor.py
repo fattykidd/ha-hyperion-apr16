@@ -16,8 +16,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from custom_components.hyperion_apr16 import device
-
 from .const import DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
 
@@ -39,12 +37,14 @@ async def async_setup_entry(
         HyperionMuteSensor(coordinator, entry),
         HyperionSensor(coordinator, entry, "audio_format", "Audio Format", None),
         HyperionSensor(coordinator, entry, "video_detail", "Video Signal", None),
+        HyperionSensor(coordinator, entry, "video_format", "Video Format", None),
+        HyperionSensor(coordinator, entry, "hdr_status", "HDR Status", None),
         HyperionSensor(coordinator, entry, "brightness", "Display Brightness", "%"),
         HyperionSensor(coordinator, entry, "temperature", "Temperature", "°C", SensorDeviceClass.TEMPERATURE),
         HyperionSensor(coordinator, entry, "host_ip", "Host IP", None),
         HyperionSensor(coordinator, entry, "bass", "Input Bass", "dB"),
         HyperionSensor(coordinator, entry, "treble", "Input Treble", "dB"),
-        HyperionActiveDiracSlotSensor(coordinator, device, entry),
+        HyperionActiveDiracSlotSensor(coordinator, coordinator.device, entry),
     ]
 
     async_add_entities(sensors)

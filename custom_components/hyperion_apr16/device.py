@@ -234,6 +234,7 @@ class Apr16:
         trigger_res = await self._send_request("GET", "/v1/trigger/output")
         audio_format_res = await self._send_request("GET", "/v1/audioformat")
         video_detail_res = await self._send_request("GET", "/v1/videodetail")
+        video_format = await self.async_get_video_format()
         
         temperature = None
         try:
@@ -334,6 +335,7 @@ class Apr16:
             "audio_format": audio_format,
             "audio_detail": audio_detail,
             "video_detail": video_detail,
+            "video_format": video_format,
             "temperature": temperature,
             "dirac_slots_raw": dirac_slots,
         }
@@ -477,6 +479,16 @@ class Apr16:
         async with self._session.get(url) as response:
             response.raise_for_status()
             return await response.json()
+
+    async def async_get_video_format(self) -> str:
+        """Get the video resolution and refresh rate (for example "3840x2160@59.94p", or "No Signal")."""
+        try:
+            res = await self._send_request("GET", "/v1/videoformat")
+        except (ClientError, TimeoutError, OSError):
+            return "Unknown"  # firmware without this endpoint must not stop the rest of the status
+        if isinstance(res, dict):
+            return str(res.get("format") or "Unknown")
+        return "Unknown"
 
     async def async_get_max_volume(self) -> float:
         """Get the maximum volume the processor allows (percent)."""

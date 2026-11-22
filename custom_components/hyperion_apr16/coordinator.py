@@ -72,6 +72,7 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "inputs": self._on_inputs_state,
             "dirac": self._on_dirac_state,
             "speakers": self._on_speakers_state,
+            "video": self._on_video_state,
         }
         for kind in STREAM_KINDS:
             stream = StateStream(
@@ -135,9 +136,6 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _on_dirac_state(self, state: dict[str, Any]) -> None:
         """The Dirac slot or filtering changed on the processor (or in its web UI)."""
-        if self.data is None:
-            return
-
         changes: dict[str, Any] = {}
         slot = state.get("active_slot")
         if isinstance(slot, int) and not isinstance(slot, bool):
@@ -145,8 +143,20 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         filtering = state.get("filtering_enabled")
         if isinstance(filtering, bool):
             changes["dirac_active"] = filtering
+        self._apply(changes)
 
-        if any(self.data.get(key) != value for key, value in changes.items()):
+    def _on_video_state(self, state: dict[str, Any]) -> None:
+        """The video signal changed. Resolution and detail are also on REST; the HDR mode is only here."""
+        changes = {
+            key: state[key] for key in ("video_detail", "video_format", "hdr_status") if isinstance(state.get(key), str)
+        }
+        if "hdr_status" in changes:
+            self._pushed["hdr_status"] = changes["hdr_status"]
+        self._apply(changes)
+
+    def _apply(self, changes: dict[str, Any]) -> None:
+        """Publish changes to the data, if there are any that differ."""
+        if self.data is not None and any(self.data.get(key) != value for key, value in changes.items()):
             self.async_set_updated_data({**self.data, **changes})
 
     def _on_speakers_state(self, state: dict[str, Any]) -> None:
@@ -165,8 +175,7 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not changes:
             return
         self._pushed.update(changes)
-        if self.data is not None and any(self.data.get(key) != value for key, value in changes.items()):
-            self.async_set_updated_data({**self.data, **changes})
+        self._apply(changes)
 
     def _schedule_full_refresh(self) -> None:
         """Re-read the whole status now, once, however many changes arrive meanwhile."""

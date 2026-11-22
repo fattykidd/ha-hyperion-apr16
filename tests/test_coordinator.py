@@ -20,6 +20,8 @@ STATUS = {
     "active_input": "HDMI 1",
     "input_id": 1,
     "audio_mode": "multich",
+    "video_detail": "Chroma: 422 | Bit Depth: 8bit",
+    "video_format": "3840x2160@59.94p",
 }
 
 
@@ -266,6 +268,50 @@ async def test_speaker_states_without_loudness_are_ignored(coordinator) -> None:
     assert coordinator.data == before
 
 
+VIDEO_NO_SIGNAL = {
+    "has_signal": False,
+    "hdr_status": "SDR",
+    "video_detail": "Chroma: RGB | Bit Depth: 8bit",
+    "video_format": "No Signal",
+}
+
+
+async def test_the_video_signal_from_the_stream_is_applied_without_a_read(coordinator) -> None:
+    reads = coordinator.device.async_get_status.await_count
+
+    coordinator._on_video_state(VIDEO_NO_SIGNAL)
+
+    assert coordinator.data["video_format"] == "No Signal"
+    assert coordinator.data["video_detail"] == "Chroma: RGB | Bit Depth: 8bit"
+    assert coordinator.data["hdr_status"] == "SDR"
+    assert coordinator.device.async_get_status.await_count == reads
+
+
+async def test_a_refresh_over_rest_corrects_the_video_signal(coordinator) -> None:
+    coordinator._on_video_state(VIDEO_NO_SIGNAL)  # then the stream is lost and the signal returns
+
+    await coordinator.async_refresh()
+
+    assert coordinator.data["video_format"] == "3840x2160@59.94p"
+    assert coordinator.data["video_detail"] == "Chroma: 422 | Bit Depth: 8bit"
+
+
+async def test_the_hdr_status_survives_a_refresh_over_rest(coordinator) -> None:
+    coordinator._on_video_state({"hdr_status": "HDR10"})  # REST has no HDR status
+
+    await coordinator.async_refresh()
+
+    assert coordinator.data["hdr_status"] == "HDR10"
+
+
+async def test_video_values_of_the_wrong_type_are_ignored(coordinator) -> None:
+    before = dict(coordinator.data)
+
+    coordinator._on_video_state({"video_format": 2160, "video_detail": None, "hdr_status": ["SDR"]})
+
+    assert coordinator.data == before
+
+
 async def test_values_of_the_wrong_type_are_ignored(coordinator) -> None:
     before = dict(coordinator.data)
 
@@ -314,7 +360,7 @@ async def test_the_streams_are_started_and_stopped(coordinator) -> None:
     coordinator.device.async_open_state_stream = never_connects
 
     coordinator.async_start_streams()
-    assert len(coordinator._streams) == 4
+    assert len(coordinator._streams) == 5
     assert not coordinator.streams_live
 
     await coordinator.async_stop_streams()

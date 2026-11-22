@@ -9,7 +9,7 @@ DEFAULT_NAME = "Hyperion APR-16"
 # The processor pushes its state over a WebSocket (the same one its own web UI uses).
 STATE_STREAM_PORT = ATLAS_PORT
 STATE_STREAM_PATH = "/ws/state"
-STREAM_KINDS = ("audio", "inputs", "dirac", "speakers")  # the kinds of state this integration follows
+STREAM_KINDS = ("audio", "inputs", "dirac", "speakers", "video")  # the kinds of state this integration follows
 
 STREAM_SILENCE_TIMEOUT = 30  # seconds without a message (heartbeats included) before a connection is replaced
 STREAM_CONNECT_TIMEOUT = 10

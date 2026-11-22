@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Self
+from unittest.mock import AsyncMock
 
 import pytest
 from aiohttp import ClientConnectionError
@@ -165,3 +166,28 @@ async def test_loudness_is_set_with_the_request_the_processor_expects(enabled: b
     assert await make_device(session).async_set_loudness(enabled) is True
 
     assert session.posts == [("http://192.168.1.50:80/commands.v1.AtlasService/SetDSP2Loudness", body)]
+
+
+@pytest.mark.parametrize(
+    ("reply", "expected"),
+    [
+        ({"format": "3840x2160@59.94p"}, "3840x2160@59.94p"),
+        ({"format": "No Signal"}, "No Signal"),
+        ({"format": ""}, "Unknown"),
+        ({}, "Unknown"),
+        ("not json", "Unknown"),
+    ],
+)
+async def test_the_video_format_is_read(reply: Any, expected: str) -> None:
+    device = make_device(FakeSession({}))
+    device._send_request = AsyncMock(return_value=reply)
+
+    assert await device.async_get_video_format() == expected
+    device._send_request.assert_awaited_once_with("GET", "/v1/videoformat")
+
+
+async def test_firmware_without_a_video_format_endpoint_does_not_break_the_status() -> None:
+    device = make_device(FakeSession({}))
+    device._send_request = AsyncMock(side_effect=ClientConnectionError("404"))
+
+    assert await device.async_get_video_format() == "Unknown"
