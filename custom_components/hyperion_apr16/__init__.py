@@ -48,6 +48,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = HyperionDataUpdateCoordinator(hass, device=device)
     await coordinator.async_config_entry_first_refresh()
 
+    # Follow the processor's live state; polling carries on as the fallback while that isn't available
+    coordinator.async_start_streams()
+    entry.async_on_unload(coordinator.async_stop_streams)
+
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "device": device,

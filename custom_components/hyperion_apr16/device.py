@@ -6,9 +6,10 @@ import logging
 import re
 from typing import Any
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout, ClientWebSocketResponse
 
 from .config import APR16Config
+from .const import STATE_STREAM_PATH, STATE_STREAM_PORT
 from .helper import percent_to_db
 
 _LOG = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class Apr16:
 
         self._session = session
         self._base_url = f"http://{self.host}:{self.port}"
+        self._state_stream_url = f"ws://{self.host}:{STATE_STREAM_PORT}{STATE_STREAM_PATH}"
         
         # Port 80 explicit base URL for Connect-RPC / Atlas service endpoints
         self._atlas_base_url = f"http://{self.host}:80/commands.v1.AtlasService"
@@ -44,7 +46,7 @@ class Apr16:
         """Send an HTTP request to the APR-16 API using the shared session."""
         url = f"{self._base_url}{endpoint}"
         try:
-            async with self._session.request(method, url, json=data, timeout=10) as response:
+            async with self._session.request(method, url, json=data, timeout=ClientTimeout(total=10)) as response:
                 response.raise_for_status()
                 if response.content_type == "application/json":
                     return await response.json()
@@ -77,7 +79,7 @@ class Apr16:
                 headers=headers, 
                 cookies=cookies, 
                 data=inner_payload, 
-                timeout=10
+                timeout=ClientTimeout(total=10)
             ) as response:
                 response_text = await response.text()
                 if response.status >= 400:
@@ -133,7 +135,7 @@ class Apr16:
             return 0
 
         try:
-            async with session.post(url, headers=headers, data=b"", timeout=2.0) as response:
+            async with session.post(url, headers=headers, data=b"", timeout=ClientTimeout(total=2.0)) as response:
                 body = await response.read()
                 _LOG.debug(
                     "ISOLATED GetDiracActiveSlot -> status: %s | body: %r",
@@ -175,6 +177,10 @@ class Apr16:
         return res is not None
 
     # --- Existing Apr16 Methods Below ---
+    async def async_open_state_stream(self) -> ClientWebSocketResponse:
+        """Open a WebSocket to the processor's live state endpoint."""
+        return await self._session.ws_connect(self._state_stream_url)
+
     async def async_connect(self) -> bool:
         """Test connection and verify reachability of the APR-16 processor."""
         try:
@@ -330,7 +336,7 @@ class Apr16:
         """Reboot the processor."""
         url = f"{self._base_url}/v1/reboot"
         try:
-            async with self._session.post(url, json={}, timeout=5):
+            async with self._session.post(url, json={}, timeout=ClientTimeout(total=5)):
                 pass
         except (ClientError, TimeoutError, OSError) as err:
             _LOG.info("Reboot command sent; device restarted as expected: %s", err)
@@ -344,22 +350,20 @@ class Apr16:
         await self._send_request("POST", "/v1/trigger/output", {"enabled": bool(state)})
 
     async def async_get_input_names(self) -> dict[int, str]:
-        """Fetch user-defined input names from the port 8080 REST API."""
-        input_map = {}
-        # Use the client session already established on the device class
-        for input_id in range(1, 9):  # Adjust range based on your total inputs
-            url = f"http://{self.host}:8080/api/atlas/input/name?input={input_id}"
+        """Fetch the user-defined input names (inputs 1-16) from the port 8080 REST API."""
+        input_names: dict[int, str] = {}
+        for input_id in range(1, 17):
+            url = f"{self._base_url}/api/atlas/input/name?input={input_id}"
             try:
-                async with self._session.get(url, headers={"accept": "application/json"}, timeout=2) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        name = data.get("name")
-                        if name:
-                            input_map[input_id] = name
-            except (ClientError, TimeoutError, OSError):
-                _LOG.warning("Failed to fetch input name for input %d: %s", input)
-                continue
-        return input_map
+                async with self._session.get(
+                    url, headers={"accept": "application/json"}, timeout=ClientTimeout(total=1)
+                ) as resp:
+                    if resp.status == 200 and (name := (await resp.json()).get("name")):
+                        input_names[input_id] = name
+            except (ClientError, TimeoutError, OSError) as err:
+                _LOG.warning("Failed to fetch input name for input %d: %s", input_id, err)
+                break  # stop querying: the processor isn't answering
+        return input_names
 
     async def get_input_bass(self, input_id: int | str) -> float:
         """Get bass level for a specific input (-12 to +12 dB)."""
@@ -442,6 +446,24 @@ class Apr16:
         async with self._session.get(url) as response:
             response.raise_for_status()
             return await response.json()
+
+    async def async_get_max_volume(self) -> float:
+        """Get the maximum volume the processor allows (percent)."""
+        res = await self._send_request("GET", "/v1/maxvol")
+        return float(res.get("level", 100.0)) if isinstance(res, dict) else 100.0
+
+    async def set_max_volume(self, level: float) -> None:
+        """Set the maximum volume the processor allows (percent)."""
+        await self._send_request("POST", "/v1/maxvol", {"level": round(level)})
+
+    async def async_get_power_on_volume(self) -> float:
+        """Get the volume the processor starts at when it is powered on (percent)."""
+        res = await self._send_request("GET", "/v1/onvol")
+        return float(res.get("level", 0.0)) if isinstance(res, dict) else 0.0
+
+    async def set_power_on_volume(self, level: float) -> None:
+        """Set the volume the processor starts at when it is powered on (percent)."""
+        await self._send_request("POST", "/v1/onvol", {"level": round(level)})
 
     async def async_get_version(self) -> dict[str, Any]:
         """Fetch firmware version from the device."""

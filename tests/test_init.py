@@ -36,6 +36,9 @@ async def test_setup_and_unload(hass: HomeAssistant) -> None:
             },
         ),
         patch("custom_components.hyperion_apr16.Apr16") as mock_client_class,
+        patch(
+            "custom_components.hyperion_apr16.coordinator.HyperionDataUpdateCoordinator.async_start_streams"
+        ),
     ):
         # Configure mock client instance methods
         mock_client = mock_client_class.return_value

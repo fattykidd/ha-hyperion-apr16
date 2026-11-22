@@ -8,6 +8,7 @@ from typing import Any
 from aiohttp import ClientError
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -36,6 +37,12 @@ async def async_setup_entry(
             HyperionAudioConfigNumber(coordinator, device, entry, "Channel Trim", "channel_trim", -12.0, 12.0, 1.0, "dB", "mdi:speaker"),
             HyperionAudioConfigNumber(coordinator, device, entry, "Channel Gain", "channel_gain", -12.0, 12.0, 1.0, "dB", "mdi:equalizer"),
             HyperionAudioConfigNumber(coordinator, device, entry, "Lipsync Delay", "lipsync_delay", 0.0, 250.0, 5.0, "ms", "mdi:timer-sand"),
+            HyperionVolumeLimitNumber(
+                coordinator, device, entry, "Maximum Volume", "max_volume", device.set_max_volume, "mdi:volume-vibrate"
+            ),
+            HyperionVolumeLimitNumber(
+                coordinator, device, entry, "Power-On Volume", "power_on_volume", device.set_power_on_volume, "mdi:volume-high"
+            ),
         ]
     )
 
@@ -147,3 +154,56 @@ class HyperionAudioConfigNumber(CoordinatorEntity, NumberEntity):
             await self.coordinator.async_request_refresh()
         except (ClientError, OSError) as err:
             _LOG.error("Failed to set %s: %s", self._key, err)
+
+
+class HyperionVolumeLimitNumber(CoordinatorEntity, NumberEntity):
+    """A volume safety setting of the processor: its maximum volume, or the volume it starts at."""
+
+    _attr_native_min_value = 0
+    _attr_native_max_value = 100
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_mode = NumberMode.SLIDER
+    _attr_entity_category = EntityCategory.CONFIG  # a setting, not something to put on a dashboard by default
+
+    def __init__(
+        self,
+        coordinator: HyperionDataUpdateCoordinator,
+        device: Any,
+        entry: ConfigEntry,
+        name: str,
+        key: str,
+        setter: Any,
+        icon: str,
+    ) -> None:
+        """Initialize the volume limit number entity."""
+        super().__init__(coordinator)
+        self._key = key
+        self._setter = setter
+        self._attr_unique_id = f"{entry.entry_id}_{key}"
+        self._attr_name = f"{entry.title} {name}"
+        self._attr_icon = icon
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": entry.title,
+            "manufacturer": "AudioControl",
+            "model": "Hyperion APR-16",
+        }
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the limit, or None until the processor has reported it."""
+        value = (self.coordinator.data or {}).get(self._key)
+        return None if value is None else float(value)
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Send the new limit to the processor."""
+        try:
+            await self._setter(value)
+        except (ClientError, OSError) as err:
+            _LOG.error("Failed to set %s: %s", self._attr_name, err)
+            return
+
+        if self.coordinator.data:
+            self.coordinator.async_set_updated_data({**self.coordinator.data, self._key: float(value)})
+        await self.coordinator.async_request_refresh()
