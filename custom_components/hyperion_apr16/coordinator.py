@@ -12,7 +12,13 @@ from aiohttp import ClientError
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, FULL_REFRESH_INTERVAL, POLL_INTERVAL, STREAM_KINDS
+from .const import (
+    DOMAIN,
+    FULL_REFRESH_INTERVAL,
+    METER_CHANNELS,
+    POLL_INTERVAL,
+    STREAM_KINDS,
+)
 from .helper import percent_to_db
 from .stream import StateStream
 
@@ -27,6 +33,29 @@ _AUDIO_LIMIT_FIELDS = {"max_volume": "max_volume", "on_volume": "power_on_volume
 # Fields of the audio stream that change what the REST status would say. Seeing one change means the
 # status is re-read, rather than guessing how the stream's wording maps onto the REST wording.
 _AUDIO_REFRESH_FIELDS = ("audio_mode", "audio_format", "bit_depth", "sample_rate")
+
+
+def _output_names(speakers: Any) -> dict[int, str] | None:
+    """
+    The name of the speaker on each output, from the speakers stream: {1: "Front Left", ...}.
+
+    A speaker's ``id`` is the number of the physical output it is on (1 to 16). The stream's ``output`` field
+    is the processor's internal channel and is not the same thing. Unused entries are called "---". Returns
+    None when the state has no speaker list.
+    """
+    if not isinstance(speakers, list):
+        return None
+    names: dict[int, str] = {}
+    for speaker in speakers:
+        if not isinstance(speaker, dict):
+            continue
+        output = speaker.get("id")
+        label = speaker.get("custom_name") or speaker.get("name")
+        if not isinstance(output, int) or isinstance(output, bool) or not isinstance(label, str):
+            continue
+        if 1 <= output <= METER_CHANNELS and label.strip() not in ("", "---"):
+            names[output] = label.strip()
+    return names
 
 
 class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -160,8 +189,11 @@ class HyperionDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.async_set_updated_data({**self.data, **changes})
 
     def _on_speakers_state(self, state: dict[str, Any]) -> None:
-        """The speaker set-up changed. Only the loudness setting is used; the stream is its only source."""
+        """The speaker set-up changed: the loudness setting, and which speaker is on which output."""
         changes: dict[str, Any] = {}
+        names = _output_names(state.get("speakers"))
+        if names is not None:
+            changes["output_names"] = names
         capability = state.get("loudness_capability")
         if isinstance(capability, str):
             changes["loudness_supported"] = capability == "supported"

@@ -365,3 +365,38 @@ async def test_the_streams_are_started_and_stopped(coordinator) -> None:
 
     await coordinator.async_stop_streams()
     assert coordinator._streams == []
+
+
+def speaker(speaker_id: int, name: str, type_: str = "FL", custom_name: str = "", output: int = 0) -> dict:
+    return {"id": speaker_id, "name": name, "type": type_, "custom_name": custom_name, "output": output}
+
+
+async def test_output_names_come_from_the_speakers_stream_by_speaker_id(coordinator) -> None:
+    coordinator._on_speakers_state(
+        {
+            "speakers": [
+                speaker(1, "Front Left"),
+                speaker(4, "Sub 1", "SW", output=3),
+                speaker(15, "Sub 2", "SW", output=3),  # the stream's output field is not the physical output
+                speaker(9, "Upper Front Left", "TFL", custom_name="Roof FL", output=10),
+            ]
+        }
+    )
+
+    assert coordinator.data["output_names"] == {1: "Front Left", 4: "Sub 1", 15: "Sub 2", 9: "Roof FL"}
+
+
+async def test_unused_and_out_of_range_speakers_have_no_output_name(coordinator) -> None:
+    coordinator._on_speakers_state(
+        {"speakers": [speaker(2, "Front Right"), speaker(17, "---", "---"), speaker(18, "Odd"), speaker(3, "---")]}
+    )
+
+    assert coordinator.data["output_names"] == {2: "Front Right"}
+
+
+async def test_output_names_survive_a_refresh_over_rest(coordinator) -> None:
+    coordinator._on_speakers_state({"speakers": [speaker(1, "Front Left")]})
+
+    await coordinator.async_refresh()
+
+    assert coordinator.data["output_names"] == {1: "Front Left"}

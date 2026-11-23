@@ -4,6 +4,21 @@ All notable changes to this integration are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Earlier releases are listed on the
 [releases page](https://github.com/fattykidd/ha-hyperion-apr16/releases).
 
+## [0.4.0] - 2026-11-22
+
+### Added
+
+- **Level meters.** A **Level Meters** switch starts the processor's live meters, and they switch themselves off after 10 minutes. While they run there are 16 sensors, **Level Output 1** to **Level Output 16**, showing the level at each output in dB (-96 is silence), and 16 peak-hold sensors, **Peak Output 1** to **Peak Output 16**, that keep the highest level seen. Use them to check that nothing clips while you play something loud. The sensors are named after the speaker the processor has on each output, for example **Level Sub 1** or **Peak Upper Front Left**, and follow it if you change your speaker layout. An entity id is fixed when the sensor is first created, for example `sensor.hyperion_apr_16_peak_sub_1`, and doesn't change afterwards.
+- **Reset Peaks** button, which clears the held peaks.
+- The meters are throttled: a level is shown again only once it has moved 3 dB, and nothing changes more than
+  once a second. The peak-hold still sees every reading, so a short spike is not missed.
+
+### Notes
+
+- Nothing is requested from the processor while the Level Meters switch is off. The level sensors then have no value, and the peak sensors keep their last value until you press **Reset Peaks**.
+- Output N is the output labelled N on the processor's web page, and the speaker with id N is the one on it.
+An output with no speaker is simply called **Output N**.
+
 ## [0.3.5] - 2026-11-21
 
 ### Added

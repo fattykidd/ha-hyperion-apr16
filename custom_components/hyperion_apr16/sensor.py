@@ -12,12 +12,14 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, METER_CHANNELS
 from .coordinator import HyperionDataUpdateCoordinator
+from .meter_entity import HyperionMeterEntity
+from .meters import LevelMeters
 
 _LOG = logging.getLogger(__name__)
 
@@ -46,6 +48,11 @@ async def async_setup_entry(
         HyperionSensor(coordinator, entry, "treble", "Input Treble", "dB"),
         HyperionActiveDiracSlotSensor(coordinator, coordinator.device, entry),
     ]
+
+    meters = hass.data[DOMAIN][entry.entry_id]["meters"]
+    for output in range(1, METER_CHANNELS + 1):
+        sensors.append(HyperionLevelSensor(coordinator, meters, entry, output))
+        sensors.append(HyperionPeakSensor(coordinator, meters, entry, output))
 
     async_add_entities(sensors)
 
@@ -259,3 +266,82 @@ class HyperionActiveDiracSlotSensor(CoordinatorEntity, SensorEntity):
             "dirac_active": self.coordinator.data.get("dirac_active"),
             "available_slots": self.coordinator.data.get("dirac_filter_slots", []),
         }
+
+class HyperionOutputSensor(HyperionMeterEntity, SensorEntity):
+    """
+    A level meter reading for one output, in dB.
+
+    The entity is registered as "Level Output 3" and so on, which stays put. Its name follows the processor:
+    once it has said which speaker is on that output the name becomes, for example, "Level Sub 1".
+    """
+
+    _attr_native_unit_of_measurement = "dB"
+
+    def __init__(
+        self,
+        coordinator: HyperionDataUpdateCoordinator,
+        meters: LevelMeters,
+        entry: ConfigEntry,
+        output: int,
+        key: str,
+        kind: str,
+    ) -> None:
+        """Initialize the sensor for output 1 to 16."""
+        super().__init__(meters, entry, f"{key}_{output}", f"{kind} Output {output}")
+        self._coordinator = coordinator
+        self._title = entry.title
+        self._kind = kind
+        self._output = output
+        self._index = output - 1
+        self._attr_name = self._current_name()
+
+    def _current_name(self) -> str:
+        names = (self._coordinator.data or {}).get("output_names") or {}
+        return f"{self._title} {self._kind} {names.get(self._output, f'Output {self._output}')}"
+
+    async def async_added_to_hass(self) -> None:
+        """Follow the meters, and the speaker names."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self._coordinator.async_add_listener(self._rename))
+
+    @callback
+    def _rename(self) -> None:
+        """Take the speaker's name, if the processor reports a different one now."""
+        name = self._current_name()
+        if name != self._attr_name:
+            self._attr_name = name
+            self.async_write_ha_state()
+
+
+class HyperionLevelSensor(HyperionOutputSensor):
+    """The level at one output. It only has a value while the level meters are on."""
+
+    _attr_icon = "mdi:waveform"
+
+    def __init__(
+        self, coordinator: HyperionDataUpdateCoordinator, meters: LevelMeters, entry: ConfigEntry, output: int
+    ) -> None:
+        """Initialize the sensor for output 1 to 16."""
+        super().__init__(coordinator, meters, entry, output, "level", "Level")
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the level in dB, -96 being silence."""
+        return self._meters.levels[self._index]
+
+
+class HyperionPeakSensor(HyperionOutputSensor):
+    """The highest level seen at one output since the peaks were last reset."""
+
+    _attr_icon = "mdi:chart-line-variant"
+
+    def __init__(
+        self, coordinator: HyperionDataUpdateCoordinator, meters: LevelMeters, entry: ConfigEntry, output: int
+    ) -> None:
+        """Initialize the sensor for output 1 to 16."""
+        super().__init__(coordinator, meters, entry, output, "peak", "Peak")
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the held peak in dB. It stays when the meters are switched off."""
+        return self._meters.peaks[self._index]

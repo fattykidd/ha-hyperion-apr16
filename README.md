@@ -36,11 +36,17 @@ Everything is grouped under one device, **AudioControl Hyperion APR-16**.
 | Platform | What you get |
 | --- | --- |
 | **Media player** | Power, volume, mute and source selection. The source list uses the names you gave your inputs on the processor. |
-| **Switches** | Power, Mute, Display Power, 12V Trigger, **Dirac Active** and **Loudness** |
+| **Switches** | Power, Mute, Display Power, 12V Trigger, **Dirac Active**, **Loudness** and **Level Meters** |
 | **Selects** | Audio Mode and **Dirac Filter Slot** (named after your slots) |
 | **Numbers** | Panel Brightness, Bass, Treble, Channel Trim, Channel Gain and Lipsync Delay for the active input, plus **Maximum Volume** and **Power-On Volume** (listed under the device's configuration) |
-| **Sensors** | Power State, Absolute Volume, Relative Volume (dB), Mute State, Audio Format, Video Signal, **Video Format**, **HDR Status**, Display Brightness, Temperature, Host IP, Input Bass, Input Treble and Active Dirac Slot |
-| **Buttons** | Reboot, Trigger HPD, Bass / Treble / Brightness / Volume up and down, Dirac Enable / Disable and one button per Dirac slot |
+| **Sensors** | Power State, Absolute Volume, Relative Volume (dB), Mute State, Audio Format, Video Signal, **Video Format**, **HDR Status**, Display Brightness, Temperature, Host IP, Input Bass, Input Treble, Active Dirac Slot and, while the level meters are on, **Level Output 1 to 16** and **Peak Output 1 to 16** |
+| **Buttons** | Reboot, Trigger HPD, Bass / Treble / Brightness / Volume up and down, Dirac Enable / Disable and one button per Dirac slot, and **Reset Peaks** |
+
+### Level meters
+
+Switch **Level Meters** on to see the live level at each of the 16 outputs, in dB, where -96 is silence. The **Peak Output** sensors hold the highest level seen, so you can play something loud and then check that no output got close to clipping. Press **Reset Peaks** to start again. Nothing is requested from the processor while the switch is off, and the meters switch themselves off after 10 minutes.
+
+The sensors are named after the speaker the processor has on each output (**Level Front Left**, **Peak Sub 2** and so on), using the custom name if you gave the speaker one, and they follow any change you make to your layout. Each sensor's entity id is fixed when it is first created, for example `sensor.hyperion_apr_16_peak_sub_1`, so automations and dashboards keep working if you change your layout later.
 
 ### Live updates
 

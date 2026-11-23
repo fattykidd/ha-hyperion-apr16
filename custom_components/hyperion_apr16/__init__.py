@@ -13,6 +13,7 @@ from .config import APR16Config
 from .const import CONF_SESSION_COOKIE, DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
 from .device import Apr16
+from .meters import LevelMeters
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,10 +53,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator.async_start_streams()
     entry.async_on_unload(coordinator.async_stop_streams)
 
+    # The level meters only run while they are switched on
+    meters = LevelMeters(device.async_open_meter_stream, log_id=entry.title)
+    entry.async_on_unload(meters.stop)
+
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "device": device,
         "coordinator": coordinator,
+        "meters": meters,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

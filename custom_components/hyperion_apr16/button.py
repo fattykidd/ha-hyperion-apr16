@@ -14,6 +14,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
+from .meter_entity import HyperionMeterEntity
+from .meters import LevelMeters
 
 _LOG = logging.getLogger(__name__)
 
@@ -41,6 +43,7 @@ async def async_setup_entry(
         HyperionVolumeButton(coordinator, device, entry, "down"),
         HyperionDiracFilteringButton(coordinator, device, entry, True),
         HyperionDiracFilteringButton(coordinator, device, entry, False),
+        HyperionResetPeaksButton(data["meters"], entry),
     ]
 
     # Fetch custom slot names dynamically on setup for stateless slot buttons
@@ -268,3 +271,17 @@ class HyperionDiracSlotButton(HyperionBaseButton):
             await self._device.async_set_dirac_filter_slot(self._slot_index)
         except (ClientError, OSError) as err:
             _LOG.error("Failed to switch to Dirac slot index %d: %s", self._slot_index, err)
+
+
+class HyperionResetPeaksButton(HyperionMeterEntity, ButtonEntity):
+    """Button to clear the peak-hold of the level meters."""
+
+    _attr_icon = "mdi:chart-line-variant"
+
+    def __init__(self, meters: LevelMeters, entry: ConfigEntry) -> None:
+        """Initialize the button."""
+        super().__init__(meters, entry, "reset_peaks", "Reset Peaks")
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        self._meters.reset_peaks()
