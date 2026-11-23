@@ -9,7 +9,7 @@ from typing import Any
 from aiohttp import ClientError, ClientSession, ClientTimeout, ClientWebSocketResponse
 
 from .config import APR16Config
-from .const import STATE_STREAM_PATH, STATE_STREAM_PORT
+from .const import STATE_STREAM_PATH, STATE_STREAM_PORT, STREAM_CONNECT_TIMEOUT
 from .helper import percent_to_db
 
 _LOG = logging.getLogger(__name__)
@@ -213,6 +213,20 @@ class Apr16:
     async def async_open_state_stream(self) -> ClientWebSocketResponse:
         """Open a WebSocket to the processor's live state endpoint."""
         return await self._session.ws_connect(self._state_stream_url)
+
+    def async_open_meter_stream(self, body: bytes) -> Any:
+        """
+        Open the processor's level-meter stream. Use the result with ``async with``.
+
+        The meters are a server-streaming call, which only the Connect protocol on port 80 offers (REST
+        refuses it). The response has no overall timeout: it runs until it is closed.
+        """
+        return self._session.post(
+            f"{self._atlas_base_url}/VUMeterStream",
+            data=body,
+            headers={"Content-Type": "application/connect+proto", "Connect-Protocol-Version": "1"},
+            timeout=ClientTimeout(total=None, sock_connect=STREAM_CONNECT_TIMEOUT),
+        )
 
     async def async_connect(self) -> bool:
         """Test connection and verify reachability of the APR-16 processor."""

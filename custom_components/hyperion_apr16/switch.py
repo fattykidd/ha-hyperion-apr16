@@ -13,6 +13,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import HyperionDataUpdateCoordinator
+from .meter_entity import HyperionMeterEntity
+from .meters import LevelMeters
 
 _LOG = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ async def async_setup_entry(
         HyperionTriggerSwitch(coordinator, device, entry),
         HyperionDiracSwitch(coordinator, device, entry),
         HyperionLoudnessSwitch(coordinator, device, entry),
+        HyperionLevelMetersSwitch(data["meters"], entry),
     ]
 
     async_add_entities(switches)
@@ -205,3 +208,26 @@ class HyperionLoudnessSwitch(HyperionBaseSwitch):
     async def _set_loudness(self, enabled: bool) -> None:
         await self._device.async_set_loudness(enabled)
         self.coordinator.async_apply_pushed({"loudness": enabled})  # the speakers stream confirms it
+
+
+class HyperionLevelMetersSwitch(HyperionMeterEntity, SwitchEntity):
+    """Starts and stops the level meters. They switch themselves off after a while."""
+
+    _attr_icon = "mdi:chart-bar"
+
+    def __init__(self, meters: LevelMeters, entry: ConfigEntry) -> None:
+        """Initialize the switch."""
+        super().__init__(meters, entry, "level_meters", "Level Meters")
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while the level meters are running."""
+        return self._meters.active
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Start the level meters."""
+        self._meters.start()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Stop the level meters."""
+        await self._meters.stop()
